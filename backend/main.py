@@ -14,21 +14,33 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS for frontend
+# CORS for frontend (allow all origins for deployment)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize components
-pdf_processor = PDFProcessor()
-text_processor = TextProcessor()
-chunker = Chunker()
-vector_store = VectorStore()
-query_engine = QueryEngine()
+# Lazy-load heavy components to speed up startup
+pdf_processor = None
+text_processor = None
+chunker = None
+vector_store = None
+query_engine = None
+
+
+def get_components():
+    global pdf_processor, text_processor, chunker, vector_store, query_engine
+    if pdf_processor is None:
+        pdf_processor = PDFProcessor()
+        text_processor = TextProcessor()
+        chunker = Chunker()
+        vector_store = VectorStore()
+        query_engine = QueryEngine()
+    return pdf_processor, text_processor, chunker, vector_store, query_engine
+
 
 # Lazy load audio processor (requires Whisper)
 audio_processor = None
@@ -81,6 +93,12 @@ class UploadResponse(BaseModel):
     chunks_created: int
 
 
+# Health check endpoint (responds immediately, no heavy loading)
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+
 # Endpoints
 @app.get("/")
 async def root():
@@ -88,6 +106,7 @@ async def root():
         "message": "Personal Knowledge Base API",
         "version": "1.0.0",
         "endpoints": {
+            "health": "GET /health",
             "upload_pdf": "POST /api/upload/pdf",
             "upload_audio": "POST /api/upload/audio",
             "upload_text": "POST /api/upload/text",
@@ -104,19 +123,20 @@ async def upload_pdf(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
+    pdf_proc, text_proc, chunk_proc, vec_store, _ = get_components()
     content = await file.read()
 
     # Extract text from PDF
-    documents = pdf_processor.process_bytes(content, file.filename)
+    documents = pdf_proc.process_bytes(content, file.filename)
 
     if not documents:
         raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
 
     # Chunk the documents
-    chunks = chunker.chunk_documents(documents)
+    chunks = chunk_proc.chunk_documents(documents)
 
     # Store in vector database
-    vector_store.add_documents(chunks)
+    vec_store.add_documents(chunks)
 
     return UploadResponse(
         message="PDF processed successfully",
@@ -146,11 +166,13 @@ async def upload_audio(file: UploadFile = File(...)):
     if not documents:
         raise HTTPException(status_code=400, detail="No text could be transcribed from the audio")
 
+    _, _, chunk_proc, vec_store, _ = get_components()
+
     # Chunk the documents
-    chunks = chunker.chunk_documents(documents)
+    chunks = chunk_proc.chunk_documents(documents)
 
     # Store in vector database
-    vector_store.add_documents(chunks)
+    vec_store.add_documents(chunks)
 
     return UploadResponse(
         message="Audio transcribed and processed successfully",
@@ -165,14 +187,16 @@ async def upload_text(request: TextUploadRequest):
     if not request.content.strip():
         raise HTTPException(status_code=400, detail="Content cannot be empty")
 
+    _, text_proc, chunk_proc, vec_store, _ = get_components()
+
     # Process text
-    documents = text_processor.process_text(request.content, request.title)
+    documents = text_proc.process_text(request.content, request.title)
 
     # Chunk the documents
-    chunks = chunker.chunk_documents(documents)
+    chunks = chunk_proc.chunk_documents(documents)
 
     # Store in vector database
-    vector_store.add_documents(chunks)
+    vec_store.add_documents(chunks)
 
     return UploadResponse(
         message="Text processed successfully",
@@ -187,7 +211,9 @@ async def query(request: QueryRequest):
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    result = await query_engine.query(
+    _, _, _, _, q_engine = get_components()
+
+    result = await q_engine.query(
         question=request.question,
         top_k=request.top_k,
         threshold=request.threshold,
@@ -200,14 +226,16 @@ async def query(request: QueryRequest):
 @app.get("/api/sources", response_model=List[SourceResponse])
 async def get_sources():
     """Get all ingested sources."""
-    sources = vector_store.get_all_sources()
+    _, _, _, vec_store, _ = get_components()
+    sources = vec_store.get_all_sources()
     return [SourceResponse(**s) for s in sources]
 
 
 @app.delete("/api/sources/{source_name}")
 async def delete_source(source_name: str):
     """Delete all documents from a specific source."""
-    deleted = vector_store.delete_by_source(source_name)
+    _, _, _, vec_store, _ = get_components()
+    deleted = vec_store.delete_by_source(source_name)
 
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Source '{source_name}' not found")
@@ -222,8 +250,9 @@ async def delete_source(source_name: str):
 @app.get("/api/stats")
 async def get_stats():
     """Get knowledge base statistics."""
-    sources = vector_store.get_all_sources()
-    total_chunks = vector_store.count()
+    _, _, _, vec_store, _ = get_components()
+    sources = vec_store.get_all_sources()
+    total_chunks = vec_store.count()
 
     return {
         "total_sources": len(sources),
