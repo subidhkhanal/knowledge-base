@@ -3,6 +3,8 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 type UploadType = "pdf" | "audio" | "text";
 
 interface UploadResult {
@@ -33,8 +35,8 @@ export default function UploadPage() {
     try {
       const endpoint =
         activeTab === "pdf"
-          ? "http://localhost:8000/api/upload/pdf"
-          : "http://localhost:8000/api/upload/audio";
+          ? `${API_URL}/api/upload/pdf`
+          : `${API_URL}/api/upload/audio`;
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -77,7 +79,7 @@ export default function UploadPage() {
     setResult(null);
 
     try {
-      const response = await fetch("http://localhost:8000/api/upload/text", {
+      const response = await fetch(`${API_URL}/api/upload/text`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

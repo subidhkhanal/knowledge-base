@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface Source {
   source: string;
   source_type: string;
@@ -28,8 +30,8 @@ export default function SourcesPage() {
 
     try {
       const [sourcesRes, statsRes] = await Promise.all([
-        fetch("http://localhost:8000/api/sources"),
-        fetch("http://localhost:8000/api/stats"),
+        fetch(`${API_URL}/api/sources`),
+        fetch(`${API_URL}/api/stats`),
       ]);
 
       if (sourcesRes.ok) {
@@ -59,7 +61,7 @@ export default function SourcesPage() {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/sources/${encodeURIComponent(sourceName)}`,
+        `${API_URL}/api/sources/${encodeURIComponent(sourceName)}`,
         { method: "DELETE" }
       );
 
