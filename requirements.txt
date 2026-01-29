@@ -1,0 +1,26 @@
+# Web Framework
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9
+
+# Vector Database
+chromadb>=0.4.22
+
+# PDF Processing
+PyPDF2>=3.0.1
+
+# Embeddings (local, free)
+sentence-transformers>=2.3.0
+
+# Audio Transcription (local, free)
+openai-whisper>=20231117
+
+# LLM - Free Options
+groq>=0.4.0
+httpx>=0.26.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# Utilities
+tiktoken>=0.5.0
