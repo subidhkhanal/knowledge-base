@@ -1,8 +1,7 @@
 from typing import List, Dict, Any, Optional
 import uuid
 import chromadb
-from chromadb.utils import embedding_functions
-from backend.config import CHROMADB_DIR, EMBEDDING_MODEL, TOP_K, SIMILARITY_THRESHOLD
+from backend.config import CHROMADB_DIR, TOP_K, SIMILARITY_THRESHOLD
 
 
 class VectorStore:
@@ -10,12 +9,9 @@ class VectorStore:
 
     def __init__(self, collection_name: str = "knowledge_base"):
         self.client = chromadb.PersistentClient(path=str(CHROMADB_DIR))
-        self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=EMBEDDING_MODEL
-        )
+        # Use ChromaDB's default embedding function (lightweight, no PyTorch needed)
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
-            embedding_function=self.embedding_fn,
             metadata={"hnsw:space": "cosine"}
         )
 

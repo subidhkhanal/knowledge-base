@@ -14,7 +14,9 @@
       "Bash(git config:*)",
       "Bash(cmdkey /list:*)",
       "Bash(findstr:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "WebFetch(domain:personal-assistant-indol-omega.vercel.app)",
+      "WebFetch(domain:pkb-backend.onrender.com)"
     ]
   }
 }
