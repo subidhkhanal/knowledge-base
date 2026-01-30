@@ -19,6 +19,9 @@ python-dotenv>=1.0.0
 # Utilities
 tiktoken>=0.5.0
 
+# Hybrid Search (BM25 keyword search)
+rank-bm25>=0.2.2
+
 # Optional: For local audio transcription (heavy, not for free hosting)
 # openai-whisper>=20231117
 # sentence-transformers>=2.3.0

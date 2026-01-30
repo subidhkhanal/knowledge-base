@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional
 from backend.storage.vector_store import VectorStore
 from backend.llm.reasoning import LLMReasoning
-from backend.config import TOP_K, SIMILARITY_THRESHOLD
+from backend.config import TOP_K, SIMILARITY_THRESHOLD, USE_HYBRID_SEARCH
 
 
 class QueryEngine:
@@ -16,7 +16,8 @@ class QueryEngine:
         question: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        use_hybrid: bool = USE_HYBRID_SEARCH
     ) -> Dict[str, Any]:
         """
         Process a query through the RAG pipeline.
@@ -26,17 +27,26 @@ class QueryEngine:
             top_k: Number of chunks to retrieve
             threshold: Minimum similarity threshold
             source_filter: Optional filter by source name
+            use_hybrid: Use hybrid search (semantic + BM25) - defaults to config
 
         Returns:
             Dict with 'answer', 'sources', 'chunks_used', and 'provider'
         """
-        # Step 1: Retrieve relevant chunks
-        chunks = self.vector_store.search(
-            query=question,
-            top_k=top_k,
-            threshold=threshold,
-            source_filter=source_filter
-        )
+        # Step 1: Retrieve relevant chunks using hybrid or semantic search
+        if use_hybrid:
+            chunks = self.vector_store.hybrid_search(
+                query=question,
+                top_k=top_k,
+                threshold=threshold,
+                source_filter=source_filter
+            )
+        else:
+            chunks = self.vector_store.search(
+                query=question,
+                top_k=top_k,
+                threshold=threshold,
+                source_filter=source_filter
+            )
 
         # Step 2: Generate response with LLM
         result = await self.llm.generate_response(
@@ -57,16 +67,25 @@ class QueryEngine:
         question: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        use_hybrid: bool = USE_HYBRID_SEARCH
     ) -> Dict[str, Any]:
         """Synchronous version of query."""
-        # Step 1: Retrieve relevant chunks
-        chunks = self.vector_store.search(
-            query=question,
-            top_k=top_k,
-            threshold=threshold,
-            source_filter=source_filter
-        )
+        # Step 1: Retrieve relevant chunks using hybrid or semantic search
+        if use_hybrid:
+            chunks = self.vector_store.hybrid_search(
+                query=question,
+                top_k=top_k,
+                threshold=threshold,
+                source_filter=source_filter
+            )
+        else:
+            chunks = self.vector_store.search(
+                query=question,
+                top_k=top_k,
+                threshold=threshold,
+                source_filter=source_filter
+            )
 
         # Step 2: Generate response with LLM
         result = self.llm.generate_response_sync(
