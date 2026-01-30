@@ -1,119 +1,112 @@
-## Personal Knowledge Base (PKB) - Project Guideline
+# Personal Knowledge Base (PKB)
 
----
+A personal RAG system that answers questions ONLY from your uploaded content (books, notes, documents). No external data - just your knowledge.
 
-### What It Does
+## Features
 
-A personal RAG system that answers questions ONLY from your uploaded content (books, audiobooks, notes). No external data. Uses strong reasoning LLM (Claude/GPT-4) for answers which are completely free and donot need to pay at all.
+- **PDF Upload** - Extract and index text from PDF documents
+- **Text/Notes Upload** - Add plain text or markdown notes
+- **Smart Search** - Vector similarity search to find relevant content
+- **AI Answers** - Get answers powered by Groq's free LLM API
+- **Citations** - See exactly which source and page the answer came from
 
----
+## Tech Stack
 
-### Problem It Solves
+- **Backend**: Python, FastAPI, ChromaDB
+- **Frontend**: Next.js, TypeScript, Tailwind CSS
+- **LLM**: Groq API (free tier - Llama 3.1)
+- **Embeddings**: ChromaDB default (lightweight)
 
-"I have books, audiobooks, and notes scattered everywhere. I want one system to query all my knowledge with AI-level reasoning, without hitting storage limits of existing tools."
+## Live Demo
 
----
+- **Frontend**: https://personal-assistant-indol-omega.vercel.app
+- **Backend API**: https://pkb-backend.onrender.com
 
-### Core Features
+## Local Development
 
-| Feature | Description |
-|---|---|
-| PDF Upload | Extract text from PDF books/documents |
-| Audio Upload | Transcribe audiobooks/voice notes using Whisper |
-| Text/Notes Upload | Direct paste or .txt/.md files |
-| Vector Storage | Store all content in local ChromaDB (unlimited) |
-| Query System | Ask questions, retrieve relevant chunks |
-| LLM Reasoning | Send chunks to Claude API for final answer |
-| Citation | Show which book/page/source the answer came from |
-| Simple UI | Using Next.js |
+### Prerequisites
 
----
-
-### Tech Stack
-
-```
 - Python 3.10+
-- LangChain (orchestration)
-- ChromaDB (vector database, local)
-- (audio transcription)
-- PyPDF2 or pdfplumber (PDF extraction)
-- (reasoning)
-- Next.js (UI)
-- sentence-transformers (embeddings)
+- Node.js 18+
+- Groq API key (free at https://console.groq.com)
+
+### Backend Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/ashishgautam0/personal-assistant.git
+cd personal-assistant
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file
+echo "GROQ_API_KEY=your_groq_api_key_here" > .env
+echo "GROQ_MODEL=llama-3.1-8b-instant" >> .env
+
+# Run the backend
+uvicorn backend.main:app --reload --port 8000
 ```
 
----
+### Frontend Setup
 
-### Architecture
+```bash
+# Navigate to frontend
+cd frontend
 
-```
-Input Sources (PDF, Audio, Notes)
-        ↓
-Preprocessing
-    - PDF → PyPDF2 → raw text
-    - Audio → Whisper → raw text  
-    - Notes → direct text
-        ↓
-Chunking (500-1000 tokens per chunk with overlap)
-        ↓
-Embedding (sentence-transformers or OpenAI embeddings)
-        ↓
-Store in ChromaDB (with metadata: source, page, timestamp)
-        ↓
-User Query
-        ↓
-Embed query → Similarity search → Top K relevant chunks
-        ↓
-Prompt = System instruction + Retrieved chunks + User question
-        ↓
-LLM API → Answer with citations
-        ↓
-Display in Next.js
+# Install dependencies
+npm install
+
+# Create .env.local file
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+
+# Run the frontend
+npm run dev
 ```
 
----
+Open http://localhost:3000 in your browser.
 
-### MVP Scope (5-7 days)
+## Deployment
 
-| Day | Task |
-|---|---|
-| 1 | Setup + PDF ingestion + chunking |
-| 2 | ChromaDB storage + basic retrieval |
-| 3 | LLM integration + prompt engineering |
-| 4 | Audio transcription |
-| 5 | Next.js (upload + chat) |
-| 6 | Citations + source tracking |
-| 7 | Polish + README + deploy |
+### Backend (Render)
 
----
+1. Push code to GitHub
+2. Create new Web Service on Render
+3. Connect your repository
+4. Set environment variables:
+   - `GROQ_API_KEY` = your Groq API key
+   - `GROQ_MODEL` = llama-3.1-8b-instant
+5. Deploy
 
-### Key Implementation Details
+### Frontend (Vercel)
 
-**Chunking:**
-- Chunk size: 500-1000 tokens
-- Overlap: 100-200 tokens
-- Preserve metadata (filename, page number)
+1. Import project from GitHub
+2. Set environment variable:
+   - `NEXT_PUBLIC_API_URL` = your Render backend URL
+3. Deploy
 
-**Retrieval:**
-- Top K = 5-10 chunks
-- Similarity threshold to filter irrelevant
+## API Endpoints
 
-**Prompt Template:**
-```
-You are an assistant that answers ONLY from the provided context.
-If the answer is not in the context, say "I don't have this information in my knowledge base."
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/api/stats` | GET | Get knowledge base stats |
+| `/api/upload/pdf` | POST | Upload PDF file |
+| `/api/upload/text` | POST | Upload text content |
+| `/api/query` | POST | Ask a question |
+| `/api/sources` | GET | List all sources |
+| `/api/sources/{name}` | DELETE | Delete a source |
 
-Context:
-{retrieved_chunks}
+## Usage
 
-Question: {user_query}
+1. **Upload Content**: Go to Upload page, add PDFs or text notes
+2. **Ask Questions**: Go to Chat, ask questions about your content
+3. **View Sources**: Check Sources page to manage uploaded content
 
-Answer with citation [Source: filename, page X]:
-```
+## License
 
-**Audio Handling:**
-- Use Whisper (local or API)
-- Chunk long audio into segments
-- Store transcription with timestamp metadata
-
----
+MIT
