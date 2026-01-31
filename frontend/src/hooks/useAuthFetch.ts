@@ -1,20 +1,20 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCallback } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function useAuthFetch() {
-  const { data: session } = useSession();
+  const { user } = useAuth();
 
   const authFetch = useCallback(
     async (endpoint: string, options: RequestInit = {}) => {
       const headers = new Headers(options.headers);
 
       // Send user ID in custom header for backend identification
-      if (session?.userId) {
-        headers.set("X-User-Id", session.userId);
+      if (user?.id) {
+        headers.set("X-User-Id", user.id);
       }
 
       return fetch(`${API_URL}${endpoint}`, {
@@ -22,7 +22,7 @@ export function useAuthFetch() {
         headers,
       });
     },
-    [session?.userId]
+    [user?.id]
   );
 
   // Create XMLHttpRequest with auth header (for upload progress tracking)
@@ -31,19 +31,19 @@ export function useAuthFetch() {
       const xhr = new XMLHttpRequest();
       xhr.open(method, `${API_URL}${endpoint}`);
 
-      if (session?.userId) {
-        xhr.setRequestHeader("X-User-Id", session.userId);
+      if (user?.id) {
+        xhr.setRequestHeader("X-User-Id", user.id);
       }
 
       return xhr;
     },
-    [session?.userId]
+    [user?.id]
   );
 
   return {
     authFetch,
     createAuthXhr,
-    isAuthenticated: !!session,
-    userId: session?.userId
+    isAuthenticated: !!user,
+    userId: user?.id
   };
 }

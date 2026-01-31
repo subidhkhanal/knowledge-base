@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
 
 interface Audiobook {
@@ -105,7 +105,7 @@ function getAudioConfig(filename: string) {
 }
 
 function AudiobooksContent() {
-  const { data: session } = useSession();
+  const { user, signIn, signOut } = useAuth();
   const { authFetch } = useAuthFetch();
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -284,14 +284,14 @@ function AudiobooksContent() {
           </div>
 
           <nav className="flex items-center gap-3">
-            {session ? (
+            {user ? (
               <>
-                {session.user?.image && <img src={session.user.image} alt="" className="h-8 w-8 rounded-full ring-2 ring-zinc-700" />}
-                <button onClick={() => signOut()} className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Sign out</button>
+                {user.image && <img src={user.image} alt="" className="h-8 w-8 rounded-full ring-2 ring-zinc-700" />}
+                <button onClick={signOut} className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Sign out</button>
               </>
             ) : (
               <button
-                onClick={() => signIn("github")}
+                onClick={signIn}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
                 style={{ background: "rgba(255,255,255,0.05)" }}
               >

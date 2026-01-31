@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
 
 interface Source {
@@ -18,7 +18,7 @@ interface Stats {
 }
 
 function SourcesContent() {
-  const { data: session } = useSession();
+  const { user, signIn, signOut } = useAuth();
   const { authFetch } = useAuthFetch();
   const [sources, setSources] = useState<Source[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -112,14 +112,14 @@ function SourcesContent() {
         </Link>
         <nav className="flex items-center gap-2">
           <div className="flex items-center gap-2">
-            {session ? (
+            {user ? (
               <>
-                {session.user?.image && <img src={session.user.image} alt="" className="h-7 w-7 rounded-full" />}
-                <button onClick={() => signOut()} className="text-xs px-2 py-1 rounded transition-colors" style={{ color: 'var(--text-tertiary)' }}>Sign out</button>
+                {user.image && <img src={user.image} alt="" className="h-7 w-7 rounded-full" />}
+                <button onClick={signOut} className="text-xs px-2 py-1 rounded transition-colors" style={{ color: 'var(--text-tertiary)' }}>Sign out</button>
               </>
             ) : (
               <button
-                onClick={() => signIn("github")}
+                onClick={signIn}
                 className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors"
                 style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}
               >

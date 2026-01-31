@@ -9,6 +9,9 @@ BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 CHROMADB_DIR = DATA_DIR / "chromadb"
 
+# Chat history database
+CHAT_DB_PATH = DATA_DIR / "chat_history.db"
+
 # Ensure directories exist
 CHROMADB_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -1,11 +1,11 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession();
+  const { user, status } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return null;
   }
 
