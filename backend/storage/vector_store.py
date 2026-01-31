@@ -396,3 +396,38 @@ class VectorStore:
             results = self.collection.get(where={"user_id": user_id}, include=[])
             return len(results["ids"])
         return self.collection.count()
+
+    def get_chunks_by_source(self, source_name: str, user_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all chunks for a specific source belonging to a user.
+
+        Args:
+            source_name: Name of the source document
+            user_id: The user's unique identifier
+
+        Returns:
+            List of chunks with text and metadata, sorted by chunk_index
+        """
+        results = self.collection.get(
+            where={"$and": [{"user_id": user_id}, {"source": source_name}]},
+            include=["documents", "metadatas"]
+        )
+
+        if not results["documents"]:
+            return []
+
+        chunks = []
+        for doc, metadata in zip(results["documents"], results["metadatas"]):
+            chunks.append({
+                "text": doc,
+                "chunk_index": metadata.get("chunk_index", 0),
+                "total_chunks": metadata.get("total_chunks", 1),
+                "page": metadata.get("page"),
+                "timestamp": metadata.get("timestamp"),
+                "source_type": metadata.get("source_type", "unknown")
+            })
+
+        # Sort by chunk_index to maintain document order
+        chunks.sort(key=lambda x: x["chunk_index"])
+
+        return chunks

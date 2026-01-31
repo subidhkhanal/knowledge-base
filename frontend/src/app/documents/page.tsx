@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
 
 interface Document {
@@ -10,6 +10,20 @@ interface Document {
   source_type: string;
   chunk_count: number;
   created_at?: string;
+}
+
+interface DocumentChunk {
+  text: string;
+  chunk_index: number;
+  total_chunks: number;
+  page?: number;
+  source_type: string;
+}
+
+interface DocumentContent {
+  source: string;
+  total_chunks: number;
+  chunks: DocumentChunk[];
 }
 
 interface Toast {
@@ -127,6 +141,9 @@ function DocumentsContent() {
   const [sortBy, setSortBy] = useState<SortOption>("date");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerContent, setViewerContent] = useState<DocumentContent | null>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
 
   const addToast = (toast: Omit<Toast, "id">) => {
     const id = Date.now().toString();
@@ -199,6 +216,33 @@ function DocumentsContent() {
     } finally {
       setDeletingSource(null);
     }
+  };
+
+  const openDocument = async (sourceName: string) => {
+    setViewerOpen(true);
+    setViewerLoading(true);
+    setViewerContent(null);
+
+    try {
+      const response = await authFetch(`/api/sources/${encodeURIComponent(sourceName)}/content`);
+      if (response.ok) {
+        const data = await response.json();
+        setViewerContent(data);
+      } else {
+        addToast({ type: "error", message: "Failed to load document" });
+        setViewerOpen(false);
+      }
+    } catch {
+      addToast({ type: "error", message: "Connection failed" });
+      setViewerOpen(false);
+    } finally {
+      setViewerLoading(false);
+    }
+  };
+
+  const closeViewer = () => {
+    setViewerOpen(false);
+    setViewerContent(null);
   };
 
   // Get unique document types for filter
@@ -279,6 +323,89 @@ function DocumentsContent() {
           </div>
         ))}
       </div>
+
+      {/* Document Viewer Modal */}
+      {viewerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={closeViewer}
+          />
+
+          {/* Modal */}
+          <div
+            className="relative flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl"
+            style={{ background: "var(--bg-primary)", border: "1px solid var(--border)" }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center gap-3">
+                {viewerContent && (
+                  <>
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${getFileConfig(viewerContent.source).bgColor} ${getFileConfig(viewerContent.source).color}`}>
+                      {getFileConfig(viewerContent.source).icon}
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-white">{viewerContent.source.split('/').pop()}</h2>
+                      <p className="text-xs text-zinc-500">{viewerContent.total_chunks} sections</p>
+                    </div>
+                  </>
+                )}
+                {viewerLoading && (
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 animate-pulse rounded-xl bg-zinc-800" />
+                    <div>
+                      <div className="h-4 w-32 animate-pulse rounded bg-zinc-800" />
+                      <div className="mt-1 h-3 w-20 animate-pulse rounded bg-zinc-800" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={closeViewer}
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {viewerLoading && (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="h-10 w-10 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+                  <p className="mt-4 text-sm text-zinc-500">Loading document...</p>
+                </div>
+              )}
+
+              {viewerContent && (
+                <div className="prose prose-invert max-w-none">
+                  {viewerContent.chunks.map((chunk, index) => (
+                    <div key={index} className="mb-6">
+                      {chunk.page && (
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
+                            Page {chunk.page}
+                          </span>
+                        </div>
+                      )}
+                      <div
+                        className="whitespace-pre-wrap rounded-xl p-4 text-sm leading-relaxed text-zinc-300"
+                        style={{ background: "rgba(255,255,255,0.03)" }}
+                      >
+                        {chunk.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: "rgba(10, 10, 12, 0.8)", borderBottom: "1px solid var(--border)" }}>
@@ -499,6 +626,7 @@ function DocumentsContent() {
               return (
                 <div
                   key={doc.source}
+                  onClick={() => openDocument(doc.source)}
                   className="group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.02] animate-fade-in cursor-pointer"
                   style={{
                     background: `linear-gradient(135deg, ${config.bgColor.split(' ')[0].replace('from-', '').replace('/20', ', 0.15)')} 0%, rgba(20, 20, 25, 0.8) 100%)`,
@@ -515,6 +643,7 @@ function DocumentsContent() {
                     {/* Hover overlay with actions */}
                     <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
                       <button
+                        onClick={(e) => { e.stopPropagation(); openDocument(doc.source); }}
                         className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20"
                         title="Open"
                       >
@@ -567,6 +696,7 @@ function DocumentsContent() {
               return (
                 <div
                   key={doc.source}
+                  onClick={() => openDocument(doc.source)}
                   className="group flex items-center gap-4 rounded-xl p-4 transition-all hover:bg-white/5 animate-fade-in cursor-pointer"
                   style={{
                     border: "1px solid rgba(255,255,255,0.05)",
@@ -589,6 +719,7 @@ function DocumentsContent() {
                   {/* Actions */}
                   <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
+                      onClick={(e) => { e.stopPropagation(); openDocument(doc.source); }}
                       className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
                       title="Open"
                     >
