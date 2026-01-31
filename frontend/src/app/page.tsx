@@ -34,14 +34,11 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showAppsMenu, setShowAppsMenu] = useState(false);
-  const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const appsMenuRef = useRef<HTMLDivElement>(null);
-  const uploadMenuRef = useRef<HTMLDivElement>(null);
-  const documentInputRef = useRef<HTMLInputElement>(null);
-  const audioInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   const scrollToBottom = () => {
@@ -58,15 +55,12 @@ export default function Home() {
       if (appsMenuRef.current && !appsMenuRef.current.contains(e.target as Node)) {
         setShowAppsMenu(false);
       }
-      if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target as Node)) {
-        setShowUploadMenu(false);
-      }
     };
-    if (showAppsMenu || showUploadMenu) {
+    if (showAppsMenu) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showAppsMenu, showUploadMenu]);
+  }, [showAppsMenu]);
 
   // Toast auto-remove
   useEffect(() => {
@@ -96,8 +90,12 @@ export default function Home() {
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   };
 
-  const handleFileUpload = (file: File, type: "document" | "audio") => {
-    setShowUploadMenu(false);
+  const handleFileUpload = (file: File) => {
+    // Auto-detect file type based on extension
+    const audioExtensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm'];
+    const ext = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    const isAudio = audioExtensions.includes(ext);
+
     const toastId = addToast({
       type: "loading",
       message: `Uploading ${file.name}`,
@@ -109,7 +107,7 @@ export default function Home() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const endpoint = type === "document" ? "/api/upload/document" : "/api/upload/audio";
+    const endpoint = isAudio ? "/api/upload/audio" : "/api/upload/document";
 
     const xhr = createAuthXhr("POST", endpoint);
     xhrRef.current = xhr;
@@ -145,16 +143,14 @@ export default function Home() {
         addToast({ type: "error", message: "Upload failed", subMessage: "Invalid response" });
       }
       setUploadProgress(null);
-      if (documentInputRef.current) documentInputRef.current.value = "";
-      if (audioInputRef.current) audioInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
     });
 
     xhr.addEventListener("error", () => {
       removeToast(toastId);
       addToast({ type: "error", message: "Upload failed", subMessage: "Could not connect to server" });
       setUploadProgress(null);
-      if (documentInputRef.current) documentInputRef.current.value = "";
-      if (audioInputRef.current) audioInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
     });
 
     xhr.send(formData);
@@ -374,98 +370,30 @@ export default function Home() {
               )}
             </div>
 
-            {/* Upload Menu */}
-            <div className="relative" ref={uploadMenuRef}>
-              <button
-                onClick={() => setShowUploadMenu(!showUploadMenu)}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${showUploadMenu ? 'scale-95' : 'hover:scale-[1.02]'}`}
-                style={{
-                  color: showUploadMenu ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  background: showUploadMenu ? 'var(--bg-hover)' : 'transparent'
-                }}
-                onMouseEnter={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                onMouseLeave={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                Upload
-                <svg className={`h-3 w-3 transition-transform duration-200 ${showUploadMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {/* Upload Dropdown */}
-              {showUploadMenu && (
-                <div
-                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-64 rounded-2xl p-2 shadow-2xl animate-fade-in z-50"
-                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', backdropFilter: 'blur(20px)' }}
-                >
-                  <button
-                    onClick={() => documentInputRef.current?.click()}
-                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all duration-200 hover:scale-[1.01]"
-                    style={{ color: 'var(--text-primary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(59, 130, 246, 0.15)' }}>
-                      <svg className="h-5 w-5" style={{ color: '#60a5fa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Documents</p>
-                      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>PDF, EPUB, DOCX, TXT</p>
-                    </div>
-                    <svg className="ml-auto h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" style={{ color: 'var(--text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => audioInputRef.current?.click()}
-                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all duration-200 hover:scale-[1.01]"
-                    style={{ color: 'var(--text-primary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(168, 85, 247, 0.15)' }}>
-                      <svg className="h-5 w-5" style={{ color: '#c084fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Audio</p>
-                      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>MP3, WAV, M4A, FLAC</p>
-                    </div>
-                    <svg className="ml-auto h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" style={{ color: 'var(--text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-
-              {/* Hidden file inputs */}
-              <input
-                ref={documentInputRef}
-                type="file"
-                accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileUpload(file, "document");
-                }}
-                className="hidden"
-              />
-              <input
-                ref={audioInputRef}
-                type="file"
-                accept=".mp3,.wav,.m4a,.flac,.ogg,.webm"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileUpload(file, "audio");
-                }}
-                className="hidden"
-              />
-            </div>
+            {/* Upload Button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="group flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02]"
+              style={{ color: 'var(--text-secondary)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              title="Upload documents or audio files"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span className="hidden lg:inline">Upload</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown,.mp3,.wav,.m4a,.flac,.ogg,.webm"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file);
+              }}
+              className="hidden"
+            />
 
             {/* Sources Link */}
             <Link

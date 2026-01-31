@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
@@ -9,6 +9,7 @@ interface Document {
   source: string;
   source_type: string;
   chunk_count: number;
+  created_at?: string;
 }
 
 interface Toast {
@@ -16,6 +17,102 @@ interface Toast {
   type: "success" | "error" | "loading";
   message: string;
   subMessage?: string;
+}
+
+type SortOption = "name" | "date" | "type";
+type ViewMode = "grid" | "list";
+
+const FILE_TYPE_CONFIG: Record<string, { icon: JSX.Element; label: string; color: string; bgColor: string }> = {
+  pdf: {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        <text x="7" y="16" fontSize="6" fill="currentColor" fontWeight="bold">PDF</text>
+      </svg>
+    ),
+    label: "PDF",
+    color: "text-red-400",
+    bgColor: "from-red-500/20 to-red-600/10",
+  },
+  epub: {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    ),
+    label: "EPUB",
+    color: "text-emerald-400",
+    bgColor: "from-emerald-500/20 to-emerald-600/10",
+  },
+  docx: {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+    label: "Word",
+    color: "text-blue-400",
+    bgColor: "from-blue-500/20 to-blue-600/10",
+  },
+  doc: {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+    label: "Word",
+    color: "text-blue-400",
+    bgColor: "from-blue-500/20 to-blue-600/10",
+  },
+  html: {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+      </svg>
+    ),
+    label: "HTML",
+    color: "text-orange-400",
+    bgColor: "from-orange-500/20 to-orange-600/10",
+  },
+  txt: {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h7" />
+      </svg>
+    ),
+    label: "Text",
+    color: "text-zinc-400",
+    bgColor: "from-zinc-500/20 to-zinc-600/10",
+  },
+  md: {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+      </svg>
+    ),
+    label: "Markdown",
+    color: "text-purple-400",
+    bgColor: "from-purple-500/20 to-purple-600/10",
+  },
+};
+
+function getFileType(filename: string): string {
+  const ext = filename.toLowerCase().split('.').pop() || '';
+  return ext;
+}
+
+function getFileConfig(filename: string) {
+  const ext = getFileType(filename);
+  return FILE_TYPE_CONFIG[ext] || {
+    icon: (
+      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+    label: "Document",
+    color: "text-zinc-400",
+    bgColor: "from-zinc-500/20 to-zinc-600/10",
+  };
 }
 
 function DocumentsContent() {
@@ -26,6 +123,10 @@ function DocumentsContent() {
   const [error, setError] = useState<string | null>(null);
   const [deletingSource, setDeletingSource] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("date");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [selectedType, setSelectedType] = useState<string | null>(null);
 
   const addToast = (toast: Omit<Toast, "id">) => {
     const id = Date.now().toString();
@@ -58,7 +159,12 @@ function DocumentsContent() {
       const response = await authFetch("/api/sources");
       if (response.ok) {
         const data = await response.json();
-        setDocuments(data.filter((s: Document) => s.source_type === "pdf"));
+        // Filter to only show document types (not audio)
+        const docTypes = ['pdf', 'epub', 'docx', 'doc', 'html', 'htm', 'txt', 'md', 'markdown'];
+        setDocuments(data.filter((s: Document) => {
+          const ext = s.source.toLowerCase().split('.').pop() || '';
+          return docTypes.includes(ext) || s.source_type === 'pdf';
+        }));
       }
     } catch {
       setError("Failed to connect to the server");
@@ -95,7 +201,42 @@ function DocumentsContent() {
     }
   };
 
-  const totalChunks = documents.reduce((acc, doc) => acc + doc.chunk_count, 0);
+  // Get unique document types for filter
+  const documentTypes = useMemo(() => {
+    const types = new Set(documents.map(doc => getFileType(doc.source)));
+    return Array.from(types).filter(t => FILE_TYPE_CONFIG[t]);
+  }, [documents]);
+
+  // Filter and sort documents
+  const filteredDocuments = useMemo(() => {
+    let result = [...documents];
+
+    // Filter by search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(doc => doc.source.toLowerCase().includes(query));
+    }
+
+    // Filter by type
+    if (selectedType) {
+      result = result.filter(doc => getFileType(doc.source) === selectedType);
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "name":
+          return a.source.localeCompare(b.source);
+        case "type":
+          return getFileType(a.source).localeCompare(getFileType(b.source));
+        case "date":
+        default:
+          return (b.created_at || "").localeCompare(a.created_at || "");
+      }
+    });
+
+    return result;
+  }, [documents, searchQuery, sortBy, selectedType]);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
@@ -140,25 +281,29 @@ function DocumentsContent() {
       </div>
 
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
-        <Link href="/" className="text-lg font-medium text-white">Knowledge Base</Link>
-        <nav className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 hover:text-white">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            Chat
-          </Link>
-          <div className="ml-2 flex items-center gap-3 border-l border-zinc-800 pl-4">
+      <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: "rgba(10, 10, 12, 0.8)", borderBottom: "1px solid var(--border)" }}>
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-3 transition-opacity hover:opacity-80">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/20">
+                <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+              </div>
+              <span className="text-lg font-semibold text-white">My Library</span>
+            </Link>
+          </div>
+
+          <nav className="flex items-center gap-3">
             {session ? (
               <>
-                {session.user?.image && <img src={session.user.image} alt="" className="h-7 w-7 rounded-full ring-2 ring-zinc-700" />}
-                <button onClick={() => signOut()} className="text-xs text-zinc-500 hover:text-zinc-300">Sign out</button>
+                {session.user?.image && <img src={session.user.image} alt="" className="h-8 w-8 rounded-full ring-2 ring-zinc-700" />}
+                <button onClick={() => signOut()} className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Sign out</button>
               </>
             ) : (
               <button
                 onClick={() => signIn("github")}
-                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-zinc-400 hover:text-white"
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
                 style={{ background: "rgba(255,255,255,0.05)" }}
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
@@ -167,84 +312,131 @@ function DocumentsContent() {
                 Sign in
               </button>
             )}
-          </div>
-        </nav>
+          </nav>
+        </div>
       </header>
 
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-cyan-600/10" />
-        <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-600/10 via-transparent to-orange-600/5" />
+        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-orange-500/10 blur-3xl" />
 
-        <div className="relative mx-auto max-w-5xl px-6 py-12">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-5">
-              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/25">
-                <svg className="h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-white">Documents</h1>
-                <p className="mt-1 text-zinc-400">Your PDF library</p>
-              </div>
+        <div className="relative mx-auto max-w-7xl px-6 py-16">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-white md:text-5xl">
+              Your Document Library
+            </h1>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
+              All your documents in one place. Read, organize, and access your files anytime.
+            </p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="mx-auto mt-10 max-w-2xl">
+            <div className="relative">
+              <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search documents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-2xl py-4 pl-12 pr-4 text-white placeholder-zinc-500 outline-none transition-all focus:ring-2 focus:ring-amber-500/50"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+              />
             </div>
           </div>
 
           {/* Stats */}
-          <div className="mt-8 grid grid-cols-3 gap-4">
-            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
-                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{documents.length}</p>
-                  <p className="text-xs text-zinc-500">Documents</p>
-                </div>
-              </div>
+          <div className="mx-auto mt-10 flex max-w-2xl items-center justify-center gap-8">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-white">{documents.length}</p>
+              <p className="text-sm text-zinc-500">Documents</p>
             </div>
-            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10">
-                  <svg className="h-5 w-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6M12 9v6" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">{totalChunks}</p>
-                  <p className="text-xs text-zinc-500">Total Chunks</p>
-                </div>
-              </div>
+            <div className="h-8 w-px bg-zinc-700" />
+            <div className="text-center">
+              <p className="text-3xl font-bold text-white">{documentTypes.length}</p>
+              <p className="text-sm text-zinc-500">Formats</p>
             </div>
-            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
-                  <svg className="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-white">Ready</p>
-                  <p className="text-xs text-zinc-500">Status</p>
-                </div>
-              </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters & Controls */}
+      <div className="sticky top-[73px] z-30 backdrop-blur-xl" style={{ background: "rgba(10, 10, 12, 0.9)", borderBottom: "1px solid var(--border)" }}>
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          {/* Type Filters */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedType(null)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+                !selectedType ? "bg-amber-500/20 text-amber-400" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              All
+            </button>
+            {documentTypes.map((type) => {
+              const config = FILE_TYPE_CONFIG[type];
+              return (
+                <button
+                  key={type}
+                  onClick={() => setSelectedType(type === selectedType ? null : type)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+                    selectedType === type ? `${config.color} bg-white/10` : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  {config.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* View Controls */}
+          <div className="flex items-center gap-4">
+            {/* Sort */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-zinc-400 outline-none transition-colors hover:text-white"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+            >
+              <option value="date">Recent</option>
+              <option value="name">Name</option>
+              <option value="type">Type</option>
+            </select>
+
+            {/* View Toggle */}
+            <div className="flex items-center rounded-lg p-1" style={{ background: "rgba(255,255,255,0.05)" }}>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`rounded-md p-1.5 transition-all ${viewMode === "grid" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-white"}`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`rounded-md p-1.5 transition-all ${viewMode === "list" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-white"}`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <main className="mx-auto max-w-5xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-6 py-8">
         {/* Loading */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20">
-            <div className="h-10 w-10 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-            <p className="mt-4 text-sm text-zinc-500">Loading documents...</p>
+            <div className="h-12 w-12 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+            <p className="mt-4 text-sm text-zinc-500">Loading your library...</p>
           </div>
         )}
 
@@ -260,71 +452,169 @@ function DocumentsContent() {
 
         {/* Empty State */}
         {!isLoading && !error && documents.length === 0 && (
-          <div className="flex flex-col items-center justify-center rounded-3xl py-20" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)" }}>
-            <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
-              <svg className="h-12 w-12 text-blue-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="mb-6 flex h-32 w-32 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
+              <svg className="h-16 w-16 text-amber-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-white">No documents yet</h3>
-            <p className="mt-2 text-sm text-zinc-500">Upload PDFs from the homepage</p>
+            <h3 className="text-2xl font-semibold text-white">Your library is empty</h3>
+            <p className="mt-2 text-zinc-500">Upload documents from the homepage to start building your library</p>
             <Link
               href="/"
-              className="mt-6 flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 px-6 py-3 text-sm font-semibold text-white"
+              className="mt-8 flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/25 transition-all hover:shadow-amber-500/40"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              Go to Chat
+              Upload Documents
             </Link>
           </div>
         )}
 
-        {/* Documents Grid */}
-        {!isLoading && !error && documents.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {documents.map((doc, index) => (
-              <div
-                key={doc.source}
-                className="group relative overflow-hidden rounded-2xl p-5 transition-all duration-300 hover:scale-[1.02] animate-fade-in"
-                style={{
-                  background: "linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(6, 182, 212, 0.05) 100%)",
-                  border: "1px solid rgba(59, 130, 246, 0.2)",
-                  animationDelay: `${index * 0.05}s`,
-                }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+        {/* No Results */}
+        {!isLoading && !error && documents.length > 0 && filteredDocuments.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <svg className="h-16 w-16 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <h3 className="mt-4 text-xl font-semibold text-white">No documents found</h3>
+            <p className="mt-2 text-zinc-500">Try adjusting your search or filters</p>
+            <button
+              onClick={() => { setSearchQuery(""); setSelectedType(null); }}
+              className="mt-4 text-sm text-amber-400 hover:text-amber-300"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
 
-                <div className="relative">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
-                      <svg className="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+        {/* Grid View */}
+        {!isLoading && !error && filteredDocuments.length > 0 && viewMode === "grid" && (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredDocuments.map((doc, index) => {
+              const config = getFileConfig(doc.source);
+              const filename = doc.source.split('/').pop() || doc.source;
+
+              return (
+                <div
+                  key={doc.source}
+                  className="group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.02] animate-fade-in cursor-pointer"
+                  style={{
+                    background: `linear-gradient(135deg, ${config.bgColor.split(' ')[0].replace('from-', '').replace('/20', ', 0.15)')} 0%, rgba(20, 20, 25, 0.8) 100%)`,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    animationDelay: `${index * 0.03}s`,
+                  }}
+                >
+                  {/* Document Preview Area */}
+                  <div className="relative flex h-44 items-center justify-center overflow-hidden" style={{ background: "rgba(0,0,0,0.2)" }}>
+                    <div className={`flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br ${config.bgColor} ${config.color}`}>
+                      {config.icon}
                     </div>
+
+                    {/* Hover overlay with actions */}
+                    <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20"
+                        title="Open"
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(doc.source); }}
+                        disabled={deletingSource === doc.source}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20 text-red-400 backdrop-blur-sm transition-all hover:bg-red-500/30 disabled:opacity-50"
+                        title="Delete"
+                      >
+                        {deletingSource === doc.source ? (
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+                        ) : (
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Document Info */}
+                  <div className="p-4">
+                    <h3 className="truncate text-sm font-semibold text-white" title={filename}>
+                      {filename}
+                    </h3>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${config.color}`} style={{ background: "rgba(255,255,255,0.05)" }}>
+                        {config.label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* List View */}
+        {!isLoading && !error && filteredDocuments.length > 0 && viewMode === "list" && (
+          <div className="space-y-2">
+            {filteredDocuments.map((doc, index) => {
+              const config = getFileConfig(doc.source);
+              const filename = doc.source.split('/').pop() || doc.source;
+
+              return (
+                <div
+                  key={doc.source}
+                  className="group flex items-center gap-4 rounded-xl p-4 transition-all hover:bg-white/5 animate-fade-in cursor-pointer"
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.05)",
+                    animationDelay: `${index * 0.02}s`,
+                  }}
+                >
+                  {/* Icon */}
+                  <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${config.bgColor} ${config.color}`}>
+                    {config.icon}
+                  </div>
+
+                  {/* Info */}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-medium text-white" title={filename}>
+                      {filename}
+                    </h3>
+                    <p className="mt-0.5 text-sm text-zinc-500">{config.label}</p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
-                      onClick={() => handleDelete(doc.source)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+                      title="Open"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(doc.source); }}
                       disabled={deletingSource === doc.source}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg opacity-0 transition-all group-hover:opacity-100 hover:bg-red-500/20 disabled:opacity-50"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-red-500/20 hover:text-red-400 disabled:opacity-50"
+                      title="Delete"
                     >
                       {deletingSource === doc.source ? (
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
                       ) : (
-                        <svg className="h-4 w-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       )}
                     </button>
                   </div>
-
-                  <h3 className="mb-1 truncate text-sm font-semibold text-white" title={doc.source}>{doc.source}</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-300">PDF</span>
-                    <span className="text-xs text-zinc-500">{doc.chunk_count} chunks</span>
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
