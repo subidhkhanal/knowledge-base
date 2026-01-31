@@ -1,24 +1,26 @@
 import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
+import GitHub from "next-auth/providers/github";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  secret: process.env.AUTH_SECRET,
+  trustHost: true,
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    GitHub({
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     }),
   ],
   callbacks: {
-    async jwt({ token, account }) {
-      // Persist the Google ID token to the JWT
-      if (account) {
-        token.idToken = account.id_token;
+    async jwt({ token, account, profile }) {
+      // Store GitHub user ID in the token
+      if (account && profile) {
+        token.userId = profile.id?.toString() || account.providerAccountId;
       }
       return token;
     },
     async session({ session, token }) {
-      // Expose the ID token to the client session
-      session.idToken = token.idToken as string;
+      // Expose the user ID to the client session
+      session.userId = token.userId as string;
       return session;
     },
   },

@@ -3,6 +3,7 @@
 :root {
   /* Dark theme colors - deep and elegant */
   --bg-primary: #0a0a0b;
+  --bg-primary-rgb: 10, 10, 11;
   --bg-secondary: #111113;
   --bg-tertiary: #18181b;
   --bg-elevated: #1f1f23;
@@ -109,6 +110,11 @@ button, a, input, textarea {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes pulse-subtle {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
@@ -119,8 +125,22 @@ button, a, input, textarea {
   100% { background-position: 200% 0; }
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.6); }
+}
+
 .animate-fade-in {
-  animation: fadeIn 0.3s ease forwards;
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-pulse-subtle {

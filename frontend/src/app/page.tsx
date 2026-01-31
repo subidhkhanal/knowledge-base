@@ -267,194 +267,279 @@ export default function Home() {
         ))}
       </div>
 
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-        <h1 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
-          Knowledge Base
-        </h1>
-        <nav className="flex items-center gap-2">
-          {/* Apps Menu */}
-          <div className="relative" ref={appsMenuRef}>
-            <button
-              onClick={() => setShowAppsMenu(!showAppsMenu)}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors"
-              style={{ color: 'var(--text-secondary)', background: showAppsMenu ? 'var(--bg-hover)' : 'transparent' }}
-              onMouseEnter={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-              onMouseLeave={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'transparent'; }}
+      {/* Header - Glassmorphism Navbar */}
+      <header
+        className="sticky top-0 z-40 backdrop-blur-xl"
+        style={{
+          background: 'rgba(var(--bg-primary-rgb, 17, 17, 17), 0.8)',
+          borderBottom: '1px solid var(--border)',
+          boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)'
+        }}
+      >
+        <div className="flex items-center justify-between px-6 py-3">
+          {/* Logo & Brand */}
+          <Link href="/" className="group flex items-center gap-3">
+            <div
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-105"
+              style={{
+                background: 'linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%)',
+                boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
+              }}
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
               </svg>
-            </button>
+              <div className="absolute -inset-1 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 blur transition-opacity duration-300 group-hover:opacity-30" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-base font-semibold tracking-tight transition-colors" style={{ color: 'var(--text-primary)' }}>
+                Knowledge Base
+              </span>
+              <span className="text-[10px] font-medium uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
+                AI Assistant
+              </span>
+            </div>
+          </Link>
 
-            {/* Dropdown Menu */}
-            {showAppsMenu && (
-              <div
-                className="absolute right-0 top-full mt-2 w-72 rounded-2xl p-4 shadow-2xl animate-fade-in z-50"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+          {/* Center Navigation */}
+          <nav className="hidden md:flex items-center gap-1 rounded-full px-2 py-1.5" style={{ background: 'var(--bg-secondary)' }}>
+            {/* Apps Menu */}
+            <div className="relative" ref={appsMenuRef}>
+              <button
+                onClick={() => setShowAppsMenu(!showAppsMenu)}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${showAppsMenu ? 'scale-95' : 'hover:scale-[1.02]'}`}
+                style={{
+                  color: showAppsMenu ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: showAppsMenu ? 'var(--bg-hover)' : 'transparent'
+                }}
+                onMouseEnter={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'transparent'; }}
               >
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Documents Card */}
-                  <Link
-                    href="/documents"
-                    onClick={() => setShowAppsMenu(false)}
-                    className="group relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-200 hover:scale-[1.03]"
-                    style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0f1c2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+                Apps
+                <svg className={`h-3 w-3 transition-transform duration-200 ${showAppsMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Apps Dropdown */}
+              {showAppsMenu && (
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-80 rounded-2xl p-4 shadow-2xl animate-fade-in z-50"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)',
+                    backdropFilter: 'blur(20px)'
+                  }}
+                >
+                  <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                    Browse Content
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Link
+                      href="/documents"
+                      onClick={() => setShowAppsMenu(false)}
+                      className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
+                      style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0f1c2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                      <div className="relative mb-3 flex h-12 w-12 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(59, 130, 246, 0.25)' }}>
+                        <svg className="h-6 w-6" style={{ color: '#60a5fa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <span className="relative text-sm font-semibold text-white">Documents</span>
+                      <span className="relative mt-1 text-[10px] text-white/50">PDFs, EPUBs, Docs</span>
+                    </Link>
+
+                    <Link
+                      href="/audiobooks"
+                      onClick={() => setShowAppsMenu(false)}
+                      className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
+                      style={{ background: 'linear-gradient(135deg, #4a1d6a 0%, #1a0a2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                      <div className="relative mb-3 flex h-12 w-12 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(168, 85, 247, 0.25)' }}>
+                        <svg className="h-6 w-6" style={{ color: '#c084fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                      </div>
+                      <span className="relative text-sm font-semibold text-white">Audiobooks</span>
+                      <span className="relative mt-1 text-[10px] text-white/50">Audio files</span>
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Upload Menu */}
+            <div className="relative" ref={uploadMenuRef}>
+              <button
+                onClick={() => setShowUploadMenu(!showUploadMenu)}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${showUploadMenu ? 'scale-95' : 'hover:scale-[1.02]'}`}
+                style={{
+                  color: showUploadMenu ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: showUploadMenu ? 'var(--bg-hover)' : 'transparent'
+                }}
+                onMouseEnter={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Upload
+                <svg className={`h-3 w-3 transition-transform duration-200 ${showUploadMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Upload Dropdown */}
+              {showUploadMenu && (
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-64 rounded-2xl p-2 shadow-2xl animate-fade-in z-50"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', backdropFilter: 'blur(20px)' }}
+                >
+                  <button
+                    onClick={() => documentInputRef.current?.click()}
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all duration-200 hover:scale-[1.01]"
+                    style={{ color: 'var(--text-primary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'rgba(59, 130, 246, 0.25)' }}>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(59, 130, 246, 0.15)' }}>
                       <svg className="h-5 w-5" style={{ color: '#60a5fa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     </div>
-                    <span className="text-sm font-medium text-white">Documents</span>
-                  </Link>
-
-                  {/* Audiobooks Card */}
-                  <Link
-                    href="/audiobooks"
-                    onClick={() => setShowAppsMenu(false)}
-                    className="group relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-200 hover:scale-[1.03]"
-                    style={{ background: 'linear-gradient(135deg, #4a1d6a 0%, #1a0a2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    <div>
+                      <p className="text-sm font-semibold">Documents</p>
+                      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>PDF, EPUB, DOCX, TXT</p>
+                    </div>
+                    <svg className="ml-auto h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" style={{ color: 'var(--text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => audioInputRef.current?.click()}
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all duration-200 hover:scale-[1.01]"
+                    style={{ color: 'var(--text-primary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'rgba(168, 85, 247, 0.25)' }}>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(168, 85, 247, 0.15)' }}>
                       <svg className="h-5 w-5" style={{ color: '#c084fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                       </svg>
                     </div>
-                    <span className="text-sm font-medium text-white">Audiobooks</span>
-                  </Link>
+                    <div>
+                      <p className="text-sm font-semibold">Audio</p>
+                      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>MP3, WAV, M4A, FLAC</p>
+                    </div>
+                    <svg className="ml-auto h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" style={{ color: 'var(--text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* Upload Menu */}
-          <div className="relative" ref={uploadMenuRef}>
-            <button
-              onClick={() => setShowUploadMenu(!showUploadMenu)}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-              style={{ color: 'var(--text-secondary)', background: showUploadMenu ? 'var(--bg-hover)' : 'transparent' }}
-              onMouseEnter={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-              onMouseLeave={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'transparent'; }}
+              {/* Hidden file inputs */}
+              <input
+                ref={documentInputRef}
+                type="file"
+                accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file, "document");
+                }}
+                className="hidden"
+              />
+              <input
+                ref={audioInputRef}
+                type="file"
+                accept=".mp3,.wav,.m4a,.flac,.ogg,.webm"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file, "audio");
+                }}
+                className="hidden"
+              />
+            </div>
+
+            {/* Sources Link */}
+            <Link
+              href="/sources"
+              className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02]"
+              style={{ color: 'var(--text-secondary)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
-              Upload
-            </button>
+              Sources
+            </Link>
+          </nav>
 
-            {/* Upload Dropdown */}
-            {showUploadMenu && (
-              <div
-                className="absolute right-0 top-full mt-2 w-56 rounded-xl p-2 shadow-2xl animate-fade-in z-50"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-              >
-                <button
-                  onClick={() => documentInputRef.current?.click()}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
-                  style={{ color: 'var(--text-primary)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'rgba(59, 130, 246, 0.15)' }}>
-                    <svg className="h-4 w-4" style={{ color: '#60a5fa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Documents</p>
-                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>PDF, EPUB, DOCX, TXT</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => audioInputRef.current?.click()}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
-                  style={{ color: 'var(--text-primary)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'rgba(168, 85, 247, 0.15)' }}>
-                    <svg className="h-4 w-4" style={{ color: '#c084fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Audio</p>
-                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>MP3, WAV, M4A, FLAC</p>
-                  </div>
-                </button>
-                              </div>
-            )}
-
-            {/* Hidden file inputs */}
-            <input
-              ref={documentInputRef}
-              type="file"
-              accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file, "document");
-              }}
-              className="hidden"
-            />
-            <input
-              ref={audioInputRef}
-              type="file"
-              accept=".mp3,.wav,.m4a,.flac,.ogg,.webm"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file, "audio");
-              }}
-              className="hidden"
-            />
-          </div>
-          <Link
-            href="/sources"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-            style={{ color: 'var(--text-secondary)', background: 'transparent' }}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-            Sources
-          </Link>
-          <div className="ml-2 flex items-center gap-2 border-l pl-4" style={{ borderColor: 'var(--border)' }}>
+          {/* Right Side - User Section */}
+          <div className="flex items-center gap-3">
             {session ? (
-              <>
-                {session.user?.image && (
-                  <img src={session.user.image} alt="" className="h-7 w-7 rounded-full" />
-                )}
-                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  {session.user?.name?.split(' ')[0]}
-                </span>
+              <div className="group relative flex items-center gap-3">
+                <div className="flex items-center gap-3 rounded-full py-1.5 pl-1.5 pr-4 transition-all duration-200" style={{ background: 'var(--bg-secondary)' }}>
+                  {session.user?.image ? (
+                    <img
+                      src={session.user.image}
+                      alt=""
+                      className="h-8 w-8 rounded-full ring-2 ring-white/10 transition-all group-hover:ring-purple-500/50"
+                    />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: 'var(--accent)' }}>
+                      <span className="text-sm font-medium text-white">
+                        {session.user?.name?.charAt(0) || 'U'}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>
+                      {session.user?.name?.split(' ')[0] || 'User'}
+                    </span>
+                    <span className="text-[10px] leading-tight" style={{ color: 'var(--text-tertiary)' }}>
+                      Signed in
+                    </span>
+                  </div>
+                </div>
                 <button
                   onClick={() => signOut()}
-                  className="cursor-pointer text-xs px-2 py-1 rounded transition-colors"
-                  style={{ color: 'var(--text-tertiary)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  className="flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 hover:scale-105"
+                  style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#ef4444'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                  title="Sign out"
                 >
-                  Sign out
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
                 </button>
-              </>
+              </div>
             ) : (
               <button
                 onClick={() => signIn("github")}
-                className="flex cursor-pointer items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors"
-                style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                className="group flex items-center gap-2 rounded-full py-2 pl-3 pr-4 text-sm font-medium transition-all duration-300 hover:scale-105"
+                style={{
+                  background: 'linear-gradient(135deg, #24292e 0%, #1a1a1a 100%)',
+                  color: 'white',
+                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)'
+                }}
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                <svg className="h-5 w-5 transition-transform group-hover:rotate-12" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                 </svg>
-                Sign in
+                Sign in with GitHub
               </button>
             )}
           </div>
-        </nav>
+        </div>
       </header>
 
       {/* Chat Area */}

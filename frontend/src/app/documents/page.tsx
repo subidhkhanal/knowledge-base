@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
@@ -18,29 +18,14 @@ interface Toast {
   subMessage?: string;
 }
 
-interface UploadState {
-  isUploading: boolean;
-  progress: number;
-  fileName: string;
-}
-
 function DocumentsContent() {
   const { data: session } = useSession();
-  const { authFetch, createAuthXhr } = useAuthFetch();
+  const { authFetch } = useAuthFetch();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingSource, setDeletingSource] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [uploadState, setUploadState] = useState<UploadState>({
-    isUploading: false,
-    progress: 0,
-    fileName: "",
-  });
-  const [isDragging, setIsDragging] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   const addToast = (toast: Omit<Toast, "id">) => {
     const id = Date.now().toString();
@@ -50,10 +35,6 @@ function DocumentsContent() {
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const updateToast = (id: string, updates: Partial<Toast>) => {
-    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   };
 
   useEffect(() => {
@@ -114,80 +95,6 @@ function DocumentsContent() {
     }
   };
 
-  const handleFileUpload = async (file: File) => {
-    setShowUploadModal(false);
-    const toastId = addToast({
-      type: "loading",
-      message: `Uploading ${file.name}`,
-      subMessage: "0%",
-    });
-
-    setUploadState({ isUploading: true, progress: 0, fileName: file.name });
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const xhr = createAuthXhr("POST", "/api/upload/pdf");
-    xhrRef.current = xhr;
-
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
-        setUploadState((prev) => ({ ...prev, progress: percent }));
-        updateToast(toastId, { subMessage: `${percent}%` });
-      }
-    });
-
-    xhr.addEventListener("load", () => {
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          removeToast(toastId);
-          addToast({
-            type: "success",
-            message: "Upload complete",
-            subMessage: `${data.chunks_created} chunks created`,
-          });
-          fetchDocuments();
-        } else {
-          removeToast(toastId);
-          addToast({ type: "error", message: "Upload failed", subMessage: data.detail });
-        }
-      } catch {
-        removeToast(toastId);
-        addToast({ type: "error", message: "Upload failed" });
-      }
-      setUploadState({ isUploading: false, progress: 0, fileName: "" });
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    });
-
-    xhr.addEventListener("error", () => {
-      removeToast(toastId);
-      addToast({ type: "error", message: "Connection failed" });
-      setUploadState({ isUploading: false, progress: 0, fileName: "" });
-    });
-
-    xhr.addEventListener("abort", () => {
-      removeToast(toastId);
-      addToast({ type: "error", message: "Upload cancelled" });
-      setUploadState({ isUploading: false, progress: 0, fileName: "" });
-    });
-
-    xhr.send(formData);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFileUpload(file);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type === "application/pdf") handleFileUpload(file);
-  };
-
   const totalChunks = documents.reduce((acc, doc) => acc + doc.chunk_count, 0);
 
   return (
@@ -231,45 +138,6 @@ function DocumentsContent() {
           </div>
         ))}
       </div>
-
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowUploadModal(false)}>
-          <div
-            className="animate-fade-in w-full max-w-md rounded-3xl p-8"
-            style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
-                <svg className="h-8 w-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-white">Upload Document</h3>
-              <p className="mt-1 text-sm text-zinc-400">Add a PDF to your knowledge base</p>
-            </div>
-            <div
-              className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 transition-all"
-              style={{
-                borderColor: isDragging ? "#3b82f6" : "var(--border)",
-                background: isDragging ? "rgba(59, 130, 246, 0.1)" : "var(--bg-tertiary)",
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-            >
-              <svg className="mb-3 h-10 w-10 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-sm font-medium text-white">Drop PDF here</p>
-              <p className="text-xs text-zinc-500">or click to browse</p>
-            </div>
-            <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleFileChange} className="hidden" />
-          </div>
-        </div>
-      )}
 
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -322,16 +190,6 @@ function DocumentsContent() {
                 <p className="mt-1 text-zinc-400">Your PDF library</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              disabled={uploadState.isUploading}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:shadow-xl hover:shadow-blue-500/30 disabled:opacity-50"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Document
-            </button>
           </div>
 
           {/* Stats */}
@@ -380,26 +238,6 @@ function DocumentsContent() {
         </div>
       </div>
 
-      {/* Upload Progress */}
-      {uploadState.isUploading && (
-        <div className="mx-auto max-w-5xl px-6">
-          <div className="rounded-2xl p-4" style={{ background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 animate-pulse rounded-xl bg-blue-500/20" />
-                <div>
-                  <p className="text-sm font-medium text-white">{uploadState.fileName}</p>
-                  <p className="text-xs text-blue-400">Uploading... {uploadState.progress}%</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-blue-500/20">
-              <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300" style={{ width: `${uploadState.progress}%` }} />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Content */}
       <main className="mx-auto max-w-5xl px-6 py-8">
         {/* Loading */}
@@ -429,16 +267,16 @@ function DocumentsContent() {
               </svg>
             </div>
             <h3 className="text-xl font-semibold text-white">No documents yet</h3>
-            <p className="mt-2 text-sm text-zinc-500">Upload your first PDF to get started</p>
-            <button
-              onClick={() => setShowUploadModal(true)}
+            <p className="mt-2 text-sm text-zinc-500">Upload PDFs from the homepage</p>
+            <Link
+              href="/"
               className="mt-6 flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 px-6 py-3 text-sm font-semibold text-white"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              Upload Document
-            </button>
+              Go to Chat
+            </Link>
           </div>
         )}
 

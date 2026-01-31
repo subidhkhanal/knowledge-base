@@ -12,18 +12,17 @@ export function useAuthFetch() {
     async (endpoint: string, options: RequestInit = {}) => {
       const headers = new Headers(options.headers);
 
-      if (session?.idToken) {
-        headers.set("Authorization", `Bearer ${session.idToken}`);
+      // Send user ID in custom header for backend identification
+      if (session?.userId) {
+        headers.set("X-User-Id", session.userId);
       }
 
-      // Ensure credentials are included for CORS
       return fetch(`${API_URL}${endpoint}`, {
         ...options,
         headers,
-        credentials: "include",
       });
     },
-    [session?.idToken]
+    [session?.userId]
   );
 
   // Create XMLHttpRequest with auth header (for upload progress tracking)
@@ -32,19 +31,19 @@ export function useAuthFetch() {
       const xhr = new XMLHttpRequest();
       xhr.open(method, `${API_URL}${endpoint}`);
 
-      if (session?.idToken) {
-        xhr.setRequestHeader("Authorization", `Bearer ${session.idToken}`);
+      if (session?.userId) {
+        xhr.setRequestHeader("X-User-Id", session.userId);
       }
 
       return xhr;
     },
-    [session?.idToken]
+    [session?.userId]
   );
 
   return {
     authFetch,
     createAuthXhr,
     isAuthenticated: !!session,
-    idToken: session?.idToken
+    userId: session?.userId
   };
 }
