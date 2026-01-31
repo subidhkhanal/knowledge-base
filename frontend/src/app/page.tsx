@@ -20,13 +20,29 @@ interface Message {
   provider?: string;
 }
 
+interface Toast {
+  id: string;
+  type: "success" | "error" | "loading";
+  message: string;
+  subMessage?: string;
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
-  const { authFetch } = useAuthFetch();
+  const { authFetch, createAuthXhr } = useAuthFetch();
   const { messages, setMessages, isLoaded } = useChatHistory();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showAppsMenu, setShowAppsMenu] = useState(false);
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const appsMenuRef = useRef<HTMLDivElement>(null);
+  const uploadMenuRef = useRef<HTMLDivElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,6 +51,114 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (appsMenuRef.current && !appsMenuRef.current.contains(e.target as Node)) {
+        setShowAppsMenu(false);
+      }
+      if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target as Node)) {
+        setShowUploadMenu(false);
+      }
+    };
+    if (showAppsMenu || showUploadMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAppsMenu, showUploadMenu]);
+
+  // Toast auto-remove
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setToasts((prev) =>
+        prev.filter((t) => {
+          if (t.type === "loading") return true;
+          const age = Date.now() - parseInt(t.id);
+          return age < 4000;
+        })
+      );
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const addToast = (toast: Omit<Toast, "id">) => {
+    const id = Date.now().toString();
+    setToasts((prev) => [...prev, { ...toast, id }]);
+    return id;
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const updateToast = (id: string, updates: Partial<Toast>) => {
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
+  };
+
+  const handleFileUpload = (file: File, type: "document" | "audio") => {
+    setShowUploadMenu(false);
+    const toastId = addToast({
+      type: "loading",
+      message: `Uploading ${file.name}`,
+      subMessage: "0%",
+    });
+
+    setUploadProgress({ fileName: file.name, progress: 0 });
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const endpoint = type === "document" ? "/api/upload/document" : "/api/upload/audio";
+
+    const xhr = createAuthXhr("POST", endpoint);
+    xhrRef.current = xhr;
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        setUploadProgress({ fileName: file.name, progress: percent });
+        updateToast(toastId, { subMessage: `${percent}%` });
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          removeToast(toastId);
+          addToast({
+            type: "success",
+            message: "Upload complete",
+            subMessage: `${data.chunks_created || data.chunk_count || 0} chunks created`,
+          });
+        } else {
+          removeToast(toastId);
+          addToast({
+            type: "error",
+            message: "Upload failed",
+            subMessage: data.detail || "Unknown error",
+          });
+        }
+      } catch {
+        removeToast(toastId);
+        addToast({ type: "error", message: "Upload failed", subMessage: "Invalid response" });
+      }
+      setUploadProgress(null);
+      if (documentInputRef.current) documentInputRef.current.value = "";
+      if (audioInputRef.current) audioInputRef.current.value = "";
+    });
+
+    xhr.addEventListener("error", () => {
+      removeToast(toastId);
+      addToast({ type: "error", message: "Upload failed", subMessage: "Could not connect to server" });
+      setUploadProgress(null);
+      if (documentInputRef.current) documentInputRef.current.value = "";
+      if (audioInputRef.current) audioInputRef.current.value = "";
+    });
+
+    xhr.send(formData);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,24 +224,190 @@ export default function Home() {
 
   return (
     <div className="flex h-screen flex-col" style={{ background: 'var(--bg-primary)' }}>
+      {/* Toast Notifications */}
+      <div className="fixed right-4 top-4 z-50 flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="animate-fade-in flex items-start gap-3 rounded-xl px-4 py-3 shadow-lg"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", minWidth: "280px" }}
+          >
+            {toast.type === "loading" && (
+              <div className="mt-0.5">
+                <svg className="h-5 w-5 animate-spin" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            )}
+            {toast.type === "success" && (
+              <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full" style={{ background: "var(--success-bg)" }}>
+                <svg className="h-3 w-3" style={{ color: "var(--success)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            )}
+            {toast.type === "error" && (
+              <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full" style={{ background: "var(--error-bg)" }}>
+                <svg className="h-3 w-3" style={{ color: "var(--error)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <div className="flex-1">
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{toast.message}</p>
+              {toast.subMessage && <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>{toast.subMessage}</p>}
+            </div>
+            <button onClick={() => removeToast(toast.id)} className="mt-0.5 cursor-pointer opacity-50 transition-opacity hover:opacity-100" style={{ color: "var(--text-tertiary)" }}>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
         <h1 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
           Knowledge Base
         </h1>
         <nav className="flex items-center gap-2">
-          <Link
-            href="/upload"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-            style={{ color: 'var(--text-secondary)', background: 'transparent' }}
-            onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-            </svg>
-            Upload
-          </Link>
+          {/* Apps Menu */}
+          <div className="relative" ref={appsMenuRef}>
+            <button
+              onClick={() => setShowAppsMenu(!showAppsMenu)}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors"
+              style={{ color: 'var(--text-secondary)', background: showAppsMenu ? 'var(--bg-hover)' : 'transparent' }}
+              onMouseEnter={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+              onMouseLeave={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+
+            {/* Dropdown Menu */}
+            {showAppsMenu && (
+              <div
+                className="absolute right-0 top-full mt-2 w-72 rounded-2xl p-4 shadow-2xl animate-fade-in z-50"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Documents Card */}
+                  <Link
+                    href="/documents"
+                    onClick={() => setShowAppsMenu(false)}
+                    className="group relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-200 hover:scale-[1.03]"
+                    style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0f1c2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'rgba(59, 130, 246, 0.25)' }}>
+                      <svg className="h-5 w-5" style={{ color: '#60a5fa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-medium text-white">Documents</span>
+                  </Link>
+
+                  {/* Audiobooks Card */}
+                  <Link
+                    href="/audiobooks"
+                    onClick={() => setShowAppsMenu(false)}
+                    className="group relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-xl transition-all duration-200 hover:scale-[1.03]"
+                    style={{ background: 'linear-gradient(135deg, #4a1d6a 0%, #1a0a2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'rgba(168, 85, 247, 0.25)' }}>
+                      <svg className="h-5 w-5" style={{ color: '#c084fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                      </svg>
+                    </div>
+                    <span className="text-sm font-medium text-white">Audiobooks</span>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Upload Menu */}
+          <div className="relative" ref={uploadMenuRef}>
+            <button
+              onClick={() => setShowUploadMenu(!showUploadMenu)}
+              className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+              style={{ color: 'var(--text-secondary)', background: showUploadMenu ? 'var(--bg-hover)' : 'transparent' }}
+              onMouseEnter={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+              onMouseLeave={(e) => { if (!showUploadMenu) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Upload
+            </button>
+
+            {/* Upload Dropdown */}
+            {showUploadMenu && (
+              <div
+                className="absolute right-0 top-full mt-2 w-56 rounded-xl p-2 shadow-2xl animate-fade-in z-50"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+              >
+                <button
+                  onClick={() => documentInputRef.current?.click()}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
+                  style={{ color: 'var(--text-primary)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'rgba(59, 130, 246, 0.15)' }}>
+                    <svg className="h-4 w-4" style={{ color: '#60a5fa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Documents</p>
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>PDF, EPUB, DOCX, TXT</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => audioInputRef.current?.click()}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors"
+                  style={{ color: 'var(--text-primary)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: 'rgba(168, 85, 247, 0.15)' }}>
+                    <svg className="h-4 w-4" style={{ color: '#c084fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Audio</p>
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>MP3, WAV, M4A, FLAC</p>
+                  </div>
+                </button>
+                              </div>
+            )}
+
+            {/* Hidden file inputs */}
+            <input
+              ref={documentInputRef}
+              type="file"
+              accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file, "document");
+              }}
+              className="hidden"
+            />
+            <input
+              ref={audioInputRef}
+              type="file"
+              accept=".mp3,.wav,.m4a,.flac,.ogg,.webm"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file, "audio");
+              }}
+              className="hidden"
+            />
+          </div>
           <Link
             href="/sources"
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
@@ -141,7 +431,7 @@ export default function Home() {
                 </span>
                 <button
                   onClick={() => signOut()}
-                  className="text-xs px-2 py-1 rounded transition-colors"
+                  className="cursor-pointer text-xs px-2 py-1 rounded transition-colors"
                   style={{ color: 'var(--text-tertiary)' }}
                   onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -151,17 +441,14 @@ export default function Home() {
               </>
             ) : (
               <button
-                onClick={() => signIn("google")}
-                className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors"
+                onClick={() => signIn("github")}
+                className="flex cursor-pointer items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors"
                 style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
               >
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                 </svg>
                 Sign in
               </button>
@@ -184,13 +471,13 @@ export default function Home() {
                 Ask anything
               </h2>
               <p className="max-w-sm text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                Query your uploaded documents, notes, and audio transcriptions
+                Query your uploaded documents and notes
               </p>
               {!session && (
                 <p className="mt-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>
                   Chat history saved locally.{' '}
                   <button
-                    onClick={() => signIn("google")}
+                    onClick={() => signIn("github")}
                     className="underline"
                     style={{ color: 'var(--accent)' }}
                   >

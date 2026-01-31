@@ -6,8 +6,12 @@ python-multipart>=0.0.9
 # Vector Database (includes lightweight default embeddings)
 chromadb>=0.4.22
 
-# PDF Processing
+# Document Processing
 PyPDF2>=3.0.1
+ebooklib>=0.18
+python-docx>=1.1.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
 
 # LLM - Free Options
 groq>=0.4.0
@@ -15,9 +19,6 @@ httpx>=0.26.0
 
 # Configuration
 python-dotenv>=1.0.0
-
-# Authentication (Google OAuth)
-google-auth>=2.0.0
 
 # Utilities
 tiktoken>=0.5.0
