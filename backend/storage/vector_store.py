@@ -7,7 +7,7 @@ from backend.config import CHROMADB_DIR, TOP_K, SIMILARITY_THRESHOLD, SEMANTIC_W
 
 
 class VectorStore:
-    """ChromaDB vector store with hybrid search (semantic + BM25)."""
+    """ChromaDB vector store with hybrid search (semantic + BM25) and user isolation."""
 
     def __init__(self, collection_name: str = "knowledge_base"):
         self.client = chromadb.PersistentClient(path=str(CHROMADB_DIR))
@@ -16,10 +16,8 @@ class VectorStore:
             name=collection_name,
             metadata={"hnsw:space": "cosine"}
         )
-        # BM25 index (built lazily)
-        self._bm25_index = None
-        self._bm25_docs = None
-        self._bm25_ids = None
+        # BM25 index (built lazily per user)
+        self._bm25_cache = {}  # user_id -> {index, docs, ids, metadatas}
 
     def _tokenize(self, text: str) -> List[str]:
         """Simple tokenizer for BM25."""
@@ -28,34 +26,49 @@ class VectorStore:
         tokens = re.findall(r'\b\w+\b', text)
         return tokens
 
-    def _build_bm25_index(self):
-        """Build or rebuild the BM25 index from all documents."""
-        results = self.collection.get(include=["documents", "metadatas"])
+    def _build_bm25_index(self, user_id: str):
+        """Build or rebuild the BM25 index for a specific user."""
+        results = self.collection.get(
+            where={"user_id": user_id},
+            include=["documents", "metadatas"]
+        )
 
         if not results["documents"]:
-            self._bm25_index = None
-            self._bm25_docs = []
-            self._bm25_ids = []
+            self._bm25_cache[user_id] = {
+                "index": None,
+                "docs": [],
+                "ids": [],
+                "metadatas": []
+            }
             return
 
-        self._bm25_docs = results["documents"]
-        self._bm25_ids = results["ids"]
-        self._bm25_metadatas = results["metadatas"]
+        docs = results["documents"]
+        ids = results["ids"]
+        metadatas = results["metadatas"]
 
         # Tokenize all documents
-        tokenized_docs = [self._tokenize(doc) for doc in self._bm25_docs]
-        self._bm25_index = BM25Okapi(tokenized_docs)
+        tokenized_docs = [self._tokenize(doc) for doc in docs]
+        index = BM25Okapi(tokenized_docs)
 
-    def _invalidate_bm25_index(self):
-        """Invalidate the BM25 index so it gets rebuilt on next search."""
-        self._bm25_index = None
+        self._bm25_cache[user_id] = {
+            "index": index,
+            "docs": docs,
+            "ids": ids,
+            "metadatas": metadatas
+        }
 
-    def add_documents(self, documents: List[Dict[str, Any]]) -> List[str]:
+    def _invalidate_bm25_index(self, user_id: str):
+        """Invalidate the BM25 index for a user so it gets rebuilt on next search."""
+        if user_id in self._bm25_cache:
+            del self._bm25_cache[user_id]
+
+    def add_documents(self, documents: List[Dict[str, Any]], user_id: str) -> List[str]:
         """
-        Add documents to the vector store.
+        Add documents to the vector store for a specific user.
 
         Args:
             documents: List of dicts with 'text' and metadata
+            user_id: The user's unique identifier
 
         Returns:
             List of document IDs
@@ -74,6 +87,7 @@ class VectorStore:
 
             # Prepare metadata (ChromaDB only supports str, int, float, bool)
             metadata = {
+                "user_id": user_id,  # User isolation
                 "source": str(doc.get("source", "unknown")),
                 "source_type": str(doc.get("source_type", "unknown")),
                 "chunk_index": int(doc.get("chunk_index", 0)),
@@ -97,23 +111,25 @@ class VectorStore:
             metadatas=metadatas
         )
 
-        # Invalidate BM25 index so it gets rebuilt
-        self._invalidate_bm25_index()
+        # Invalidate BM25 index for this user
+        self._invalidate_bm25_index(user_id)
 
         return ids
 
     def search(
         self,
         query: str,
+        user_id: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Semantic search for similar documents.
+        Semantic search for similar documents belonging to a specific user.
 
         Args:
             query: Search query
+            user_id: The user's unique identifier
             top_k: Number of results to return
             threshold: Minimum similarity score
             source_filter: Optional filter by source name
@@ -121,9 +137,11 @@ class VectorStore:
         Returns:
             List of matching documents with scores
         """
-        where_filter = None
+        # Build where filter with user_id
         if source_filter:
-            where_filter = {"source": source_filter}
+            where_filter = {"$and": [{"user_id": user_id}, {"source": source_filter}]}
+        else:
+            where_filter = {"user_id": user_id}
 
         results = self.collection.query(
             query_texts=[query],
@@ -155,32 +173,40 @@ class VectorStore:
     def bm25_search(
         self,
         query: str,
+        user_id: str,
         top_k: int = TOP_K,
         source_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        BM25 keyword search.
+        BM25 keyword search for a specific user.
 
         Args:
             query: Search query
+            user_id: The user's unique identifier
             top_k: Number of results to return
             source_filter: Optional filter by source name
 
         Returns:
             List of matching documents with BM25 scores
         """
-        # Build index if not exists
-        if self._bm25_index is None:
-            self._build_bm25_index()
+        # Build index if not exists for this user
+        if user_id not in self._bm25_cache:
+            self._build_bm25_index(user_id)
 
-        if not self._bm25_docs:
+        cache = self._bm25_cache.get(user_id, {})
+        if not cache.get("docs"):
             return []
+
+        index = cache["index"]
+        docs = cache["docs"]
+        ids = cache["ids"]
+        metadatas = cache["metadatas"]
 
         # Tokenize query
         query_tokens = self._tokenize(query)
 
         # Get BM25 scores for all documents
-        scores = self._bm25_index.get_scores(query_tokens)
+        scores = index.get_scores(query_tokens)
 
         # Create list of (index, score) and sort by score descending
         scored_docs = [(i, score) for i, score in enumerate(scores)]
@@ -192,17 +218,17 @@ class VectorStore:
             if score <= 0:
                 continue
 
-            metadata = self._bm25_metadatas[idx]
+            metadata = metadatas[idx]
 
             # Apply source filter
             if source_filter and metadata.get("source") != source_filter:
                 continue
 
             documents.append({
-                "text": self._bm25_docs[idx],
+                "text": docs[idx],
                 "metadata": metadata,
                 "bm25_score": score,
-                "id": self._bm25_ids[idx]
+                "id": ids[idx]
             })
 
             if len(documents) >= top_k:
@@ -213,6 +239,7 @@ class VectorStore:
     def hybrid_search(
         self,
         query: str,
+        user_id: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None,
@@ -225,6 +252,7 @@ class VectorStore:
 
         Args:
             query: Search query
+            user_id: The user's unique identifier
             top_k: Number of results to return
             threshold: Minimum similarity score for semantic search
             source_filter: Optional filter by source name
@@ -238,6 +266,7 @@ class VectorStore:
         # Get results from both search methods
         semantic_results = self.search(
             query=query,
+            user_id=user_id,
             top_k=top_k * 2,  # Get more to have better fusion
             threshold=threshold,
             source_filter=source_filter
@@ -245,6 +274,7 @@ class VectorStore:
 
         bm25_results = self.bm25_search(
             query=query,
+            user_id=user_id,
             top_k=top_k * 2,
             source_filter=source_filter
         )
@@ -308,9 +338,12 @@ class VectorStore:
 
         return results
 
-    def get_all_sources(self) -> List[Dict[str, Any]]:
-        """Get all unique sources in the collection."""
-        results = self.collection.get(include=["metadatas"])
+    def get_all_sources(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all unique sources for a specific user."""
+        results = self.collection.get(
+            where={"user_id": user_id},
+            include=["metadatas"]
+        )
 
         sources = {}
         for metadata in results["metadatas"]:
@@ -325,29 +358,41 @@ class VectorStore:
 
         return list(sources.values())
 
-    def delete_by_source(self, source_name: str) -> int:
+    def delete_by_source(self, source_name: str, user_id: str) -> int:
         """
-        Delete all documents from a specific source.
+        Delete all documents from a specific source for a specific user.
 
         Args:
             source_name: Name of the source to delete
+            user_id: The user's unique identifier
 
         Returns:
             Number of documents deleted
         """
         results = self.collection.get(
-            where={"source": source_name},
+            where={"$and": [{"user_id": user_id}, {"source": source_name}]},
             include=[]
         )
 
         if results["ids"]:
             self.collection.delete(ids=results["ids"])
-            # Invalidate BM25 index
-            self._invalidate_bm25_index()
+            # Invalidate BM25 index for this user
+            self._invalidate_bm25_index(user_id)
             return len(results["ids"])
 
         return 0
 
-    def count(self) -> int:
-        """Get total number of documents in the collection."""
+    def count(self, user_id: Optional[str] = None) -> int:
+        """
+        Get total number of documents, optionally filtered by user.
+
+        Args:
+            user_id: Optional user ID to filter by
+
+        Returns:
+            Number of documents
+        """
+        if user_id:
+            results = self.collection.get(where={"user_id": user_id}, include=[])
+            return len(results["ids"])
         return self.collection.count()

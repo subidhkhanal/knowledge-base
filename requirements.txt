@@ -16,11 +16,17 @@ httpx>=0.26.0
 # Configuration
 python-dotenv>=1.0.0
 
+# Authentication (Google OAuth)
+google-auth>=2.0.0
+
 # Utilities
 tiktoken>=0.5.0
 
 # Hybrid Search (BM25 keyword search)
 rank-bm25>=0.2.2
+
+# Re-ranking (Cohere free tier: 1000 req/month)
+cohere>=5.0.0
 
 # Optional: For local audio transcription (heavy, not for free hosting)
 # openai-whisper>=20231117

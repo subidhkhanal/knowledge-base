@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import os
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -7,6 +8,7 @@ import uvicorn
 from backend.ingestion import PDFProcessor, Chunker, TextProcessor, is_whisper_available
 from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
+from backend.auth import get_current_user
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -14,11 +16,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS for frontend (allow all origins for deployment)
+# CORS for frontend
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,  # Must be False when using wildcard origins
+    allow_origins=[
+        "http://localhost:3000",
+        FRONTEND_URL,
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -93,13 +99,13 @@ class UploadResponse(BaseModel):
     chunks_created: int
 
 
-# Health check endpoint (responds immediately, no heavy loading)
+# Health check endpoint (responds immediately, no heavy loading, no auth)
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
 
-# Endpoints
+# Root endpoint (no auth)
 @app.get("/")
 async def root():
     return {
@@ -118,11 +124,15 @@ async def root():
 
 
 @app.post("/api/upload/pdf", response_model=UploadResponse)
-async def upload_pdf(file: UploadFile = File(...)):
-    """Upload and process a PDF file."""
+async def upload_pdf(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload and process a PDF file for the authenticated user."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
+    user_id = current_user["user_id"]
     pdf_proc, text_proc, chunk_proc, vec_store, _ = get_components()
     content = await file.read()
 
@@ -135,8 +145,8 @@ async def upload_pdf(file: UploadFile = File(...)):
     # Chunk the documents
     chunks = chunk_proc.chunk_documents(documents)
 
-    # Store in vector database
-    vec_store.add_documents(chunks)
+    # Store in vector database with user_id
+    vec_store.add_documents(chunks, user_id=user_id)
 
     return UploadResponse(
         message="PDF processed successfully",
@@ -146,8 +156,11 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 
 @app.post("/api/upload/audio", response_model=UploadResponse)
-async def upload_audio(file: UploadFile = File(...)):
-    """Upload and transcribe an audio file."""
+async def upload_audio(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload and transcribe an audio file for the authenticated user."""
     allowed_extensions = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm"}
     ext = "." + file.filename.lower().split(".")[-1] if "." in file.filename else ""
 
@@ -157,6 +170,7 @@ async def upload_audio(file: UploadFile = File(...)):
             detail=f"Unsupported audio format. Allowed: {', '.join(allowed_extensions)}"
         )
 
+    user_id = current_user["user_id"]
     processor = get_audio_processor()
     content = await file.read()
 
@@ -171,8 +185,8 @@ async def upload_audio(file: UploadFile = File(...)):
     # Chunk the documents
     chunks = chunk_proc.chunk_documents(documents)
 
-    # Store in vector database
-    vec_store.add_documents(chunks)
+    # Store in vector database with user_id
+    vec_store.add_documents(chunks, user_id=user_id)
 
     return UploadResponse(
         message="Audio transcribed and processed successfully",
@@ -182,11 +196,15 @@ async def upload_audio(file: UploadFile = File(...)):
 
 
 @app.post("/api/upload/text", response_model=UploadResponse)
-async def upload_text(request: TextUploadRequest):
-    """Upload direct text content."""
+async def upload_text(
+    request: TextUploadRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload direct text content for the authenticated user."""
     if not request.content.strip():
         raise HTTPException(status_code=400, detail="Content cannot be empty")
 
+    user_id = current_user["user_id"]
     _, text_proc, chunk_proc, vec_store, _ = get_components()
 
     # Process text
@@ -195,8 +213,8 @@ async def upload_text(request: TextUploadRequest):
     # Chunk the documents
     chunks = chunk_proc.chunk_documents(documents)
 
-    # Store in vector database
-    vec_store.add_documents(chunks)
+    # Store in vector database with user_id
+    vec_store.add_documents(chunks, user_id=user_id)
 
     return UploadResponse(
         message="Text processed successfully",
@@ -206,15 +224,20 @@ async def upload_text(request: TextUploadRequest):
 
 
 @app.post("/api/query", response_model=QueryResponse)
-async def query(request: QueryRequest):
-    """Query the knowledge base."""
+async def query(
+    request: QueryRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Query the knowledge base for the authenticated user."""
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
+    user_id = current_user["user_id"]
     _, _, _, _, q_engine = get_components()
 
     result = await q_engine.query(
         question=request.question,
+        user_id=user_id,
         top_k=request.top_k,
         threshold=request.threshold,
         source_filter=request.source_filter
@@ -224,18 +247,23 @@ async def query(request: QueryRequest):
 
 
 @app.get("/api/sources", response_model=List[SourceResponse])
-async def get_sources():
-    """Get all ingested sources."""
+async def get_sources(current_user: dict = Depends(get_current_user)):
+    """Get all ingested sources for the authenticated user."""
+    user_id = current_user["user_id"]
     _, _, _, vec_store, _ = get_components()
-    sources = vec_store.get_all_sources()
+    sources = vec_store.get_all_sources(user_id=user_id)
     return [SourceResponse(**s) for s in sources]
 
 
 @app.delete("/api/sources/{source_name}")
-async def delete_source(source_name: str):
-    """Delete all documents from a specific source."""
+async def delete_source(
+    source_name: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete all documents from a specific source for the authenticated user."""
+    user_id = current_user["user_id"]
     _, _, _, vec_store, _ = get_components()
-    deleted = vec_store.delete_by_source(source_name)
+    deleted = vec_store.delete_by_source(source_name, user_id=user_id)
 
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Source '{source_name}' not found")
@@ -248,11 +276,12 @@ async def delete_source(source_name: str):
 
 
 @app.get("/api/stats")
-async def get_stats():
-    """Get knowledge base statistics."""
+async def get_stats(current_user: dict = Depends(get_current_user)):
+    """Get knowledge base statistics for the authenticated user."""
+    user_id = current_user["user_id"]
     _, _, _, vec_store, _ = get_components()
-    sources = vec_store.get_all_sources()
-    total_chunks = vec_store.count()
+    sources = vec_store.get_all_sources(user_id=user_id)
+    total_chunks = vec_store.count(user_id=user_id)
 
     return {
         "total_sources": len(sources),

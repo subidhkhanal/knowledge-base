@@ -25,6 +25,13 @@ USE_HYBRID_SEARCH = os.getenv("USE_HYBRID_SEARCH", "true").lower() == "true"
 SEMANTIC_WEIGHT = float(os.getenv("SEMANTIC_WEIGHT", "0.5"))  # Weight for semantic search (0-1)
 BM25_WEIGHT = float(os.getenv("BM25_WEIGHT", "0.5"))  # Weight for BM25 keyword search (0-1)
 
+# Re-ranking settings (Cohere free tier: 1000 req/month)
+# Get your free API key at https://dashboard.cohere.com/api-keys
+USE_RERANKING = os.getenv("USE_RERANKING", "true").lower() == "true"
+COHERE_API_KEY = os.getenv("COHERE_API_KEY", "")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "rerank-english-v3.0")
+RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))  # Final number of results after reranking
+
 # LLM settings - Groq is PRIMARY (free cloud API)
 # Get your free API key at https://console.groq.com
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
