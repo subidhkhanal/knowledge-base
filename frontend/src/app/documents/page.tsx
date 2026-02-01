@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
@@ -36,7 +36,7 @@ interface Toast {
 type SortOption = "name" | "date" | "type";
 type ViewMode = "grid" | "list";
 
-const FILE_TYPE_CONFIG: Record<string, { icon: JSX.Element; label: string; color: string; bgColor: string }> = {
+const FILE_TYPE_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string; bgColor: string }> = {
   pdf: {
     icon: (
       <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
