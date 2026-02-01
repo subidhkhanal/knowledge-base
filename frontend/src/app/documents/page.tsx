@@ -16,27 +16,27 @@ interface Stats {
   whisper_available: boolean;
 }
 
-function SourcesContent() {
+function DocumentsContent() {
   const { authFetch } = useAuthFetch();
-  const [sources, setSources] = useState<Source[]>([]);
+  const [documents, setDocuments] = useState<Source[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingSource, setDeletingSource] = useState<string | null>(null);
+  const [deletingDocument, setDeletingDocument] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const [sourcesRes, statsRes] = await Promise.all([
+      const [documentsRes, statsRes] = await Promise.all([
         authFetch("/api/sources"),
         authFetch("/api/stats"),
       ]);
 
-      if (sourcesRes.ok) {
-        const sourcesData = await sourcesRes.json();
-        setSources(sourcesData);
+      if (documentsRes.ok) {
+        const documentsData = await documentsRes.json();
+        setDocuments(documentsData);
       }
 
       if (statsRes.ok) {
@@ -54,14 +54,14 @@ function SourcesContent() {
     fetchData();
   }, [fetchData]);
 
-  const handleDelete = async (sourceName: string) => {
-    if (!confirm(`Delete "${sourceName}"?`)) return;
+  const handleDelete = async (documentName: string) => {
+    if (!confirm(`Delete "${documentName}"?`)) return;
 
-    setDeletingSource(sourceName);
+    setDeletingDocument(documentName);
 
     try {
       const response = await authFetch(
-        `/api/sources/${encodeURIComponent(sourceName)}`,
+        `/api/sources/${encodeURIComponent(documentName)}`,
         { method: "DELETE" }
       );
 
@@ -74,11 +74,11 @@ function SourcesContent() {
     } catch {
       alert("Failed to connect");
     } finally {
-      setDeletingSource(null);
+      setDeletingDocument(null);
     }
   };
 
-  const getSourceIcon = (type: string) => {
+  const getDocumentIcon = (type: string) => {
     switch (type) {
       case "pdf":
         return (
@@ -108,10 +108,10 @@ function SourcesContent() {
       <main className="mx-auto max-w-2xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-medium" style={{ color: 'var(--text-primary)' }}>Sources</h1>
+            <h1 className="text-2xl font-medium" style={{ color: 'var(--text-primary)' }}>Documents</h1>
             {stats && (
               <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                {stats.total_sources} sources
+                {stats.total_sources} documents
               </p>
             )}
           </div>
@@ -152,10 +152,10 @@ function SourcesContent() {
           </div>
         )}
 
-        {/* Sources List */}
+        {/* Documents List */}
         {!isLoading && !error && (
           <>
-            {sources.length === 0 ? (
+            {documents.length === 0 ? (
               <div
                 className="flex flex-col items-center justify-center rounded-xl py-16 text-center"
                 style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
@@ -165,7 +165,7 @@ function SourcesContent() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                 </div>
-                <p className="mb-1 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>No sources yet</p>
+                <p className="mb-1 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>No documents yet</p>
                 <p className="mb-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>Upload content from the main page</p>
                 <Link
                   href="/"
@@ -180,27 +180,27 @@ function SourcesContent() {
               </div>
             ) : (
               <div className="space-y-2">
-                {sources.map((source, index) => (
+                {documents.map((document, index) => (
                   <div
-                    key={source.source}
+                    key={document.source}
                     className="group flex items-center justify-between rounded-xl px-4 py-3 transition-colors animate-fade-in"
                     style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', animationDelay: `${index * 0.03}s` }}
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
-                        {getSourceIcon(source.source_type)}
+                        {getDocumentIcon(document.source_type)}
                       </div>
                       <div>
-                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{source.source}</p>
+                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{document.source}</p>
                       </div>
                     </div>
                     <button
-                      onClick={() => handleDelete(source.source)}
-                      disabled={deletingSource === source.source}
+                      onClick={() => handleDelete(document.source)}
+                      disabled={deletingDocument === document.source}
                       className="flex h-8 w-8 items-center justify-center rounded-lg opacity-0 transition-all group-hover:opacity-100 disabled:opacity-50"
                       style={{ color: 'var(--text-tertiary)' }}
                     >
-                      {deletingSource === source.source ? (
+                      {deletingDocument === document.source ? (
                         <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -222,6 +222,6 @@ function SourcesContent() {
   );
 }
 
-export default function SourcesPage() {
-  return <SourcesContent />;
+export default function DocumentsPage() {
+  return <DocumentsContent />;
 }
