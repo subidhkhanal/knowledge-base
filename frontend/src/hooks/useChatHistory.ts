@@ -155,6 +155,23 @@ export function useChatHistory() {
     }
   }, [currentConversationId, deleteConversation]);
 
+  // Rename a conversation
+  const renameConversation = useCallback((id: string, newTitle: string) => {
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) return;
+
+    setConversations(prev => prev.map(conv => {
+      if (conv.id === id) {
+        return {
+          ...conv,
+          title: trimmedTitle,
+          updatedAt: Date.now(),
+        };
+      }
+      return conv;
+    }));
+  }, []);
+
   return {
     messages,
     setMessages,
@@ -163,6 +180,7 @@ export function useChatHistory() {
     createConversation,
     selectConversation,
     deleteConversation,
+    renameConversation,
     clearHistory,
     isLoaded,
   };

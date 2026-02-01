@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
 import { useChatHistory } from "@/hooks/useChatHistory";
 
@@ -36,10 +37,13 @@ export default function Home() {
     createConversation,
     selectConversation,
     deleteConversation,
+    renameConversation,
     isLoaded
   } = useChatHistory();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
@@ -435,12 +439,49 @@ export default function Home() {
                       }}
                     >
                       <div className="flex-1 min-w-0">
-                        <p
-                          className="text-sm font-medium truncate"
-                          style={{ color: conv.id === currentConversationId ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-                        >
-                          {conv.title}
-                        </p>
+                        {editingConversationId === conv.id ? (
+                          <input
+                            type="text"
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onBlur={() => {
+                              if (editingTitle.trim()) {
+                                renameConversation(conv.id, editingTitle);
+                              }
+                              setEditingConversationId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (editingTitle.trim()) {
+                                  renameConversation(conv.id, editingTitle);
+                                }
+                                setEditingConversationId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingConversationId(null);
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                            className="w-full text-sm font-medium bg-transparent outline-none rounded px-1 -mx-1"
+                            style={{
+                              color: 'var(--text-primary)',
+                              border: '1px solid var(--accent)'
+                            }}
+                          />
+                        ) : (
+                          <p
+                            className="text-sm font-medium truncate"
+                            style={{ color: conv.id === currentConversationId ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              setEditingConversationId(conv.id);
+                              setEditingTitle(conv.title);
+                            }}
+                            title="Double-click to rename"
+                          >
+                            {conv.title}
+                          </p>
+                        )}
                         <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
                           {formatDate(conv.updatedAt)}
                         </p>
@@ -473,18 +514,22 @@ export default function Home() {
             </div>
 
             {/* Toggle Sidebar Button */}
-            <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
+            <div className="p-3 border-t flex justify-center" style={{ borderColor: 'var(--border)' }}>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs transition-all cursor-pointer"
-                style={{ color: 'var(--text-tertiary)' }}
+                className="flex h-8 w-8 items-center justify-center rounded-lg transition-all cursor-pointer"
+                style={{
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-secondary)'
+                }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
+                title="Hide sidebar"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                 </svg>
-                Hide sidebar
               </button>
             </div>
           </div>
@@ -496,7 +541,7 @@ export default function Home() {
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}
-              className="absolute left-4 top-20 z-30 flex h-8 w-8 items-center justify-center rounded-lg transition-all cursor-pointer"
+              className="fixed left-3 bottom-3 z-30 flex h-8 w-8 items-center justify-center rounded-lg transition-all cursor-pointer"
               style={{
                 background: 'var(--bg-secondary)',
                 border: '1px solid var(--border)',
@@ -547,33 +592,36 @@ export default function Home() {
                           </div>
                         </div>
                       ) : (
-                        <div>
-                          <div>
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                              {message.content}
-                            </p>
-
-                            {message.sources && message.sources.length > 0 && (
-                              <div className="mt-3">
-                                <div className="flex flex-wrap gap-2">
-                                  {message.sources.map((source, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
-                                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
-                                    >
-                                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                      </svg>
-                                      {source.source}
-                                      {source.page && <span style={{ color: 'var(--text-tertiary)' }}>p.{source.page}</span>}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
+                        <div
+                          className="rounded-2xl px-5 py-4"
+                          style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                        >
+                          <div className="prose-chat">
+                            <ReactMarkdown>{message.content}</ReactMarkdown>
                           </div>
 
+                          {message.sources && message.sources.length > 0 && (
+                            <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                              <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-tertiary)' }}>
+                                Sources
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {message.sources.map((source, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs"
+                                    style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                                  >
+                                    <svg className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span className="font-medium">{source.source}</span>
+                                    {source.page && <span style={{ color: 'var(--text-tertiary)' }}>p.{source.page}</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
