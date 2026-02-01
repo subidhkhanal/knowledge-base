@@ -6,7 +6,7 @@ from typing import Optional, List
 import uvicorn
 
 from backend.ingestion import (
-    PDFProcessor, Chunker, TextProcessor, is_whisper_available,
+    PDFProcessor, Chunker, TextProcessor,
     EPUBProcessor, is_ebooklib_available,
     DOCXProcessor, is_docx_available,
     HTMLProcessor, is_html_available
@@ -75,24 +75,6 @@ def get_components():
         "query_engine": query_engine,
         "chat_store": chat_store
     }
-
-
-# Lazy load audio processor (requires Whisper)
-audio_processor = None
-
-
-def get_audio_processor():
-    global audio_processor
-    if audio_processor is None:
-        if is_whisper_available():
-            from backend.ingestion import AudioProcessor
-            audio_processor = AudioProcessor()
-        else:
-            raise HTTPException(
-                status_code=503,
-                detail="Whisper is not installed. Install with: pip install openai-whisper"
-            )
-    return audio_processor
 
 
 # Request/Response models
@@ -172,7 +154,6 @@ async def root():
             "health": "GET /health",
             "upload_document": "POST /api/upload/document (PDF, EPUB, DOCX, HTML, TXT, MD)",
             "upload_pdf": "POST /api/upload/pdf",
-            "upload_audio": "POST /api/upload/audio",
             "upload_text": "POST /api/upload/text",
             "query": "POST /api/query",
             "sources": "GET /api/sources",
@@ -272,46 +253,6 @@ async def upload_pdf(
 
     return UploadResponse(
         message="PDF processed successfully",
-        source=file.filename,
-        chunks_created=len(chunks)
-    )
-
-
-@app.post("/api/upload/audio", response_model=UploadResponse)
-async def upload_audio(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
-):
-    """Upload and transcribe an audio file for the authenticated user."""
-    allowed_extensions = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".webm"}
-    ext = "." + file.filename.lower().split(".")[-1] if "." in file.filename else ""
-
-    if ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported audio format. Allowed: {', '.join(allowed_extensions)}"
-        )
-
-    user_id = current_user["user_id"]
-    processor = get_audio_processor()
-    content = await file.read()
-
-    # Transcribe audio
-    documents = processor.process_bytes(content, file.filename)
-
-    if not documents:
-        raise HTTPException(status_code=400, detail="No text could be transcribed from the audio")
-
-    components = get_components()
-
-    # Chunk the documents
-    chunks = components["chunker"].chunk_documents(documents)
-
-    # Store in vector database with user_id
-    components["vector_store"].add_documents(chunks, user_id=user_id)
-
-    return UploadResponse(
-        message="Audio transcribed and processed successfully",
         source=file.filename,
         chunks_created=len(chunks)
     )
@@ -450,7 +391,6 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
         "total_sources": len(sources),
         "total_chunks": total_chunks,
         "supported_formats": list(SUPPORTED_EXTENSIONS.keys()),
-        "whisper_available": is_whisper_available(),
         "epub_available": is_ebooklib_available(),
         "docx_available": is_docx_available(),
         "html_available": is_html_available()

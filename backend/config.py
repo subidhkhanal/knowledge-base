@@ -45,9 +45,6 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 USE_OLLAMA_FALLBACK = os.getenv("USE_OLLAMA_FALLBACK", "false").lower() == "true"
 
-# Whisper settings (optional, requires separate installation)
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
-
 # Prompt template
 SYSTEM_PROMPT = """You are an assistant that answers ONLY from the provided context.
 If the answer is not in the context, say "I don't have this information in my knowledge base."

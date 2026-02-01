@@ -41,11 +41,9 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showAppsMenu, setShowAppsMenu] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const appsMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
 
@@ -56,19 +54,6 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Close menus when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (appsMenuRef.current && !appsMenuRef.current.contains(e.target as Node)) {
-        setShowAppsMenu(false);
-      }
-    };
-    if (showAppsMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showAppsMenu]);
 
   // Toast auto-remove
   useEffect(() => {
@@ -99,11 +84,6 @@ export default function Home() {
   };
 
   const handleFileUpload = (file: File) => {
-    // Auto-detect file type based on extension
-    const audioExtensions = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.webm'];
-    const ext = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-    const isAudio = audioExtensions.includes(ext);
-
     const toastId = addToast({
       type: "loading",
       message: `Uploading ${file.name}`,
@@ -115,7 +95,7 @@ export default function Home() {
     const formData = new FormData();
     formData.append("file", file);
 
-    const endpoint = isAudio ? "/api/upload/audio" : "/api/upload/document";
+    const endpoint = "/api/upload/document";
 
     const xhr = createAuthXhr("POST", endpoint);
     xhrRef.current = xhr;
@@ -324,82 +304,6 @@ export default function Home() {
 
           {/* Center Navigation */}
           <nav className="hidden md:flex items-center gap-1 rounded-full px-2 py-1.5" style={{ background: 'var(--bg-secondary)' }}>
-            {/* Apps Menu */}
-            <div className="relative" ref={appsMenuRef}>
-              <button
-                onClick={() => setShowAppsMenu(!showAppsMenu)}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 cursor-pointer ${showAppsMenu ? 'scale-95' : 'hover:scale-[1.02]'}`}
-                style={{
-                  color: showAppsMenu ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  background: showAppsMenu ? 'var(--bg-hover)' : 'transparent'
-                }}
-                onMouseEnter={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                onMouseLeave={(e) => { if (!showAppsMenu) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                Apps
-                <svg className={`h-3 w-3 transition-transform duration-200 ${showAppsMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {/* Apps Dropdown */}
-              {showAppsMenu && (
-                <div
-                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-64 rounded-xl p-2 shadow-xl animate-fade-in z-50"
-                  style={{
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border)',
-                  }}
-                >
-                  <Link
-                    href="/documents"
-                    onClick={() => setShowAppsMenu(false)}
-                    className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer"
-                    style={{ color: 'var(--text-primary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'rgba(59, 130, 246, 0.15)' }}>
-                      <svg className="h-5 w-5" style={{ color: '#3b82f6' }} viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M5 4a2 2 0 0 1 2-2h6l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4z" opacity="0.3"/>
-                        <path d="M13 2v5h5l-5-5z"/>
-                        <rect x="8" y="12" width="8" height="1.5" rx="0.75"/>
-                        <rect x="8" y="15" width="5" height="1.5" rx="0.75"/>
-                      </svg>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">Documents</span>
-                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>PDFs, EPUBs, Docs</span>
-                    </div>
-                  </Link>
-
-                  <Link
-                    href="/audiobooks"
-                    onClick={() => setShowAppsMenu(false)}
-                    className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer"
-                    style={{ color: 'var(--text-primary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'rgba(168, 85, 247, 0.15)' }}>
-                      <svg className="h-5 w-5" style={{ color: '#a855f7' }} viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="3" y="8" width="4" height="8" rx="1"/>
-                        <rect x="10" y="5" width="4" height="14" rx="1"/>
-                        <rect x="17" y="8" width="4" height="8" rx="1"/>
-                      </svg>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">Audiobooks</span>
-                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Audio files</span>
-                    </div>
-                  </Link>
-                </div>
-              )}
-            </div>
-
             {/* Upload Button */}
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -407,7 +311,7 @@ export default function Home() {
               style={{ color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-              title="Upload documents or audio files"
+              title="Upload documents"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -417,7 +321,7 @@ export default function Home() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown,.mp3,.wav,.m4a,.flac,.ogg,.webm"
+              accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFileUpload(file);
@@ -612,17 +516,14 @@ export default function Home() {
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          <div
-                            className="rounded-2xl px-4 py-3"
-                            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
-                          >
+                        <div>
+                          <div>
                             <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
                               {message.content}
                             </p>
 
                             {message.sources && message.sources.length > 0 && (
-                              <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                              <div className="mt-3">
                                 <div className="flex flex-wrap gap-2">
                                   {message.sources.map((source, idx) => (
                                     <span
@@ -642,11 +543,6 @@ export default function Home() {
                             )}
                           </div>
 
-                          {message.provider && (
-                            <p className="px-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                              {message.provider}
-                            </p>
-                          )}
                         </div>
                       )}
                     </div>
