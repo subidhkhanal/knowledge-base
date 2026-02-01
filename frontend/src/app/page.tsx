@@ -484,7 +484,7 @@ export default function Home() {
                 Ask anything
               </h2>
               <p className="max-w-sm text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                Query your uploaded documents and notes
+                Query your uploaded documents
               </p>
               {!user && (
                 <p className="mt-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>
