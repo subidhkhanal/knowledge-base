@@ -2,7 +2,6 @@
 
 import { useRef, useEffect, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@/contexts/AuthContext";
 import { useAuthFetch } from "@/hooks/useAuthFetch";
 import { useChatHistory } from "@/hooks/useChatHistory";
 
@@ -28,9 +27,18 @@ interface Toast {
 }
 
 export default function Home() {
-  const { user, status, signIn, signOut } = useAuth();
   const { authFetch, createAuthXhr } = useAuthFetch();
-  const { messages, setMessages, isLoaded } = useChatHistory();
+  const {
+    messages,
+    setMessages,
+    conversations,
+    currentConversationId,
+    createConversation,
+    selectConversation,
+    deleteConversation,
+    isLoaded
+  } = useChatHistory();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showAppsMenu, setShowAppsMenu] = useState(false);
@@ -203,11 +211,28 @@ export default function Home() {
   };
 
   const clearChat = () => {
-    setMessages([]);
+    if (currentConversationId) {
+      deleteConversation(currentConversationId);
+    }
   };
 
-  // Show loading state while session is loading
-  if (status === "loading" || !isLoaded) {
+  const handleNewChat = () => {
+    createConversation();
+  };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Show loading state while chat history is loading
+  if (!isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
         <svg className="h-8 w-8 animate-spin" style={{ color: 'var(--accent)' }} viewBox="0 0 24 24" fill="none">
@@ -303,7 +328,7 @@ export default function Home() {
             <div className="relative" ref={appsMenuRef}>
               <button
                 onClick={() => setShowAppsMenu(!showAppsMenu)}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${showAppsMenu ? 'scale-95' : 'hover:scale-[1.02]'}`}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 cursor-pointer ${showAppsMenu ? 'scale-95' : 'hover:scale-[1.02]'}`}
                 style={{
                   color: showAppsMenu ? 'var(--text-primary)' : 'var(--text-secondary)',
                   background: showAppsMenu ? 'var(--bg-hover)' : 'transparent'
@@ -323,49 +348,54 @@ export default function Home() {
               {/* Apps Dropdown */}
               {showAppsMenu && (
                 <div
-                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-80 rounded-2xl p-4 shadow-2xl animate-fade-in z-50"
+                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-64 rounded-xl p-2 shadow-xl animate-fade-in z-50"
                   style={{
                     background: 'var(--bg-elevated)',
                     border: '1px solid var(--border)',
-                    backdropFilter: 'blur(20px)'
                   }}
                 >
-                  <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
-                    Browse Content
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Link
-                      href="/documents"
-                      onClick={() => setShowAppsMenu(false)}
-                      className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
-                      style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0f1c2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                      <div className="relative mb-3 flex h-12 w-12 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(59, 130, 246, 0.25)' }}>
-                        <svg className="h-6 w-6" style={{ color: '#60a5fa' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <span className="relative text-sm font-semibold text-white">Documents</span>
-                      <span className="relative mt-1 text-[10px] text-white/50">PDFs, EPUBs, Docs</span>
-                    </Link>
+                  <Link
+                    href="/documents"
+                    onClick={() => setShowAppsMenu(false)}
+                    className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer"
+                    style={{ color: 'var(--text-primary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'rgba(59, 130, 246, 0.15)' }}>
+                      <svg className="h-5 w-5" style={{ color: '#3b82f6' }} viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M5 4a2 2 0 0 1 2-2h6l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4z" opacity="0.3"/>
+                        <path d="M13 2v5h5l-5-5z"/>
+                        <rect x="8" y="12" width="8" height="1.5" rx="0.75"/>
+                        <rect x="8" y="15" width="5" height="1.5" rx="0.75"/>
+                      </svg>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Documents</span>
+                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>PDFs, EPUBs, Docs</span>
+                    </div>
+                  </Link>
 
-                    <Link
-                      href="/audiobooks"
-                      onClick={() => setShowAppsMenu(false)}
-                      className="group relative flex flex-col items-center justify-center overflow-hidden rounded-xl p-4 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5"
-                      style={{ background: 'linear-gradient(135deg, #4a1d6a 0%, #1a0a2e 100%)', border: '1px solid rgba(255,255,255,0.1)' }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                      <div className="relative mb-3 flex h-12 w-12 items-center justify-center rounded-xl transition-transform group-hover:scale-110" style={{ background: 'rgba(168, 85, 247, 0.25)' }}>
-                        <svg className="h-6 w-6" style={{ color: '#c084fc' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                        </svg>
-                      </div>
-                      <span className="relative text-sm font-semibold text-white">Audiobooks</span>
-                      <span className="relative mt-1 text-[10px] text-white/50">Audio files</span>
-                    </Link>
-                  </div>
+                  <Link
+                    href="/audiobooks"
+                    onClick={() => setShowAppsMenu(false)}
+                    className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors cursor-pointer"
+                    style={{ color: 'var(--text-primary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'rgba(168, 85, 247, 0.15)' }}>
+                      <svg className="h-5 w-5" style={{ color: '#a855f7' }} viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="3" y="8" width="4" height="8" rx="1"/>
+                        <rect x="10" y="5" width="4" height="14" rx="1"/>
+                        <rect x="17" y="8" width="4" height="8" rx="1"/>
+                      </svg>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Audiobooks</span>
+                      <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Audio files</span>
+                    </div>
+                  </Link>
                 </div>
               )}
             </div>
@@ -373,7 +403,7 @@ export default function Home() {
             {/* Upload Button */}
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="group flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02]"
+              className="group flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02] cursor-pointer"
               style={{ color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -398,7 +428,7 @@ export default function Home() {
             {/* Sources Link */}
             <Link
               href="/sources"
-              className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02]"
+              className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02] cursor-pointer"
               style={{ color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
@@ -410,217 +440,283 @@ export default function Home() {
             </Link>
           </nav>
 
-          {/* Right Side - User Section */}
-          <div className="flex items-center gap-3">
-            {user ? (
-              <div className="group relative flex items-center gap-3">
-                <div className="flex items-center gap-3 rounded-full py-1.5 pl-1.5 pr-4 transition-all duration-200" style={{ background: 'var(--bg-secondary)' }}>
-                  {user.image ? (
-                    <img
-                      src={user.image}
-                      alt=""
-                      className="h-8 w-8 rounded-full ring-2 ring-white/10 transition-all group-hover:ring-purple-500/50"
-                    />
-                  ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: 'var(--accent)' }}>
-                      <span className="text-sm font-medium text-white">
-                        {user.name?.charAt(0) || 'U'}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>
-                      {user.name?.split(' ')[0] || 'User'}
-                    </span>
-                    <span className="text-[10px] leading-tight" style={{ color: 'var(--text-tertiary)' }}>
-                      Signed in
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={signOut}
-                  className="flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 hover:scale-105"
-                  style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#ef4444'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-secondary)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}
-                  title="Sign out"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={signIn}
-                className="group flex items-center gap-2 rounded-full py-2 pl-3 pr-4 text-sm font-medium transition-all duration-300 hover:scale-105"
-                style={{
-                  background: 'linear-gradient(135deg, #24292e 0%, #1a1a1a 100%)',
-                  color: 'white',
-                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)'
-                }}
-              >
-                <svg className="h-5 w-5 transition-transform group-hover:rotate-12" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
-                Sign in
-              </button>
-            )}
-          </div>
         </div>
       </header>
 
-      {/* Chat Area */}
-      <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-6 py-8">
-          {messages.length === 0 ? (
-            <div className="flex h-[60vh] flex-col items-center justify-center text-center">
-              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'var(--accent-subtle)' }}>
-                <svg className="h-8 w-8" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h2 className="mb-2 text-xl font-medium" style={{ color: 'var(--text-primary)' }}>
-                Ask anything
-              </h2>
-              <p className="max-w-sm text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                Query your uploaded documents
-              </p>
-              {!user && (
-                <p className="mt-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                  Chat history saved locally.{' '}
-                  <button
-                    onClick={signIn}
-                    className="underline"
-                    style={{ color: 'var(--accent)' }}
-                  >
-                    Sign in
-                  </button>
-                  {' '}to sync across devices.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {messages.map((message, index) => (
-                <div
-                  key={message.id}
-                  className="animate-fade-in"
-                  style={{ animationDelay: `${index * 0.05}s` }}
-                >
-                  {message.role === "user" ? (
-                    <div className="flex justify-end">
-                      <div
-                        className="max-w-[85%] rounded-2xl px-4 py-3"
-                        style={{ background: 'var(--accent)', color: 'white' }}
-                      >
-                        <p className="text-sm leading-relaxed">{message.content}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div
-                        className="rounded-2xl px-4 py-3"
-                        style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
-                      >
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                          {message.content}
-                        </p>
-
-                        {message.sources && message.sources.length > 0 && (
-                          <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-                            <div className="flex flex-wrap gap-2">
-                              {message.sources.map((source, idx) => (
-                                <span
-                                  key={idx}
-                                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
-                                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
-                                >
-                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                  {source.source}
-                                  {source.page && <span style={{ color: 'var(--text-tertiary)' }}>p.{source.page}</span>}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {message.provider && (
-                        <p className="px-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                          {message.provider}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {isLoading && (
-                <div className="animate-fade-in">
-                  <div
-                    className="inline-flex items-center gap-1 rounded-2xl px-4 py-3"
-                    style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)' }} />
-                    <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.2s' }} />
-                    <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.4s' }} />
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* Input Area */}
-      <footer className="px-6 pb-6">
-        <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-          <div
-            className="flex items-center gap-3 rounded-xl px-4 py-3"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
-          >
-            {messages.length > 0 && (
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar - Past Conversations */}
+        <aside
+          className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 transition-all duration-300 overflow-hidden`}
+          style={{ borderRight: sidebarOpen ? '1px solid var(--border)' : 'none' }}
+        >
+          <div className="flex h-full w-64 flex-col" style={{ background: 'var(--bg-secondary)' }}>
+            {/* New Chat Button */}
+            <div className="p-3">
               <button
-                type="button"
-                onClick={clearChat}
-                className="flex h-8 w-8 items-center justify-center rounded-lg transition-all"
+                onClick={handleNewChat}
+                className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all cursor-pointer"
+                style={{
+                  background: 'var(--bg-primary)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-primary)'}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Chat
+              </button>
+            </div>
+
+            {/* Conversations List */}
+            <div className="flex-1 overflow-y-auto px-2 pb-3">
+              {conversations.length === 0 ? (
+                <div className="px-3 py-8 text-center">
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No conversations yet</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {conversations.map((conv) => (
+                    <div
+                      key={conv.id}
+                      className={`group relative flex items-center rounded-lg px-3 py-2.5 cursor-pointer transition-colors ${
+                        conv.id === currentConversationId ? 'bg-[var(--bg-hover)]' : ''
+                      }`}
+                      onClick={() => selectConversation(conv.id)}
+                      onMouseEnter={(e) => {
+                        if (conv.id !== currentConversationId) {
+                          e.currentTarget.style.background = 'var(--bg-hover)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (conv.id !== currentConversationId) {
+                          e.currentTarget.style.background = 'transparent';
+                        }
+                      }}
+                      style={{
+                        background: conv.id === currentConversationId ? 'var(--bg-hover)' : 'transparent'
+                      }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className="text-sm font-medium truncate"
+                          style={{ color: conv.id === currentConversationId ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                        >
+                          {conv.title}
+                        </p>
+                        <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                          {formatDate(conv.updatedAt)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteConversation(conv.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded transition-all cursor-pointer"
+                        style={{ color: 'var(--text-tertiary)' }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'var(--bg-tertiary)';
+                          e.currentTarget.style.color = 'var(--error)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = 'var(--text-tertiary)';
+                        }}
+                        title="Delete conversation"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Toggle Sidebar Button */}
+            <div className="p-3 border-t" style={{ borderColor: 'var(--border)' }}>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs transition-all cursor-pointer"
                 style={{ color: 'var(--text-tertiary)' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                title="Clear chat"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                 </svg>
+                Hide sidebar
               </button>
-            )}
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a question..."
-              className="flex-1 bg-transparent text-sm outline-none"
-              style={{ color: 'var(--text-primary)' }}
-              disabled={isLoading}
-            />
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <div className="flex flex-1 flex-col min-w-0">
+          {/* Toggle Sidebar Button (when closed) */}
+          {!sidebarOpen && (
             <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="flex h-8 w-8 items-center justify-center rounded-lg transition-all disabled:opacity-30"
-              style={{ background: 'var(--accent)' }}
+              onClick={() => setSidebarOpen(true)}
+              className="absolute left-4 top-20 z-30 flex h-8 w-8 items-center justify-center rounded-lg transition-all cursor-pointer"
+              style={{
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-secondary)'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+              title="Show sidebar"
             >
-              <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
               </svg>
             </button>
-          </div>
-        </form>
-      </footer>
+          )}
+
+          {/* Chat Area */}
+          <main className="flex-1 overflow-auto">
+            <div className="mx-auto max-w-3xl px-6 py-8">
+              {messages.length === 0 ? (
+                <div className="flex h-[60vh] flex-col items-center justify-center text-center">
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'var(--accent-subtle)' }}>
+                    <svg className="h-8 w-8" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <h2 className="mb-2 text-xl font-medium" style={{ color: 'var(--text-primary)' }}>
+                    Ask anything
+                  </h2>
+                  <p className="max-w-sm text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                    Query your uploaded documents
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {messages.map((message, index) => (
+                    <div
+                      key={message.id}
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                    >
+                      {message.role === "user" ? (
+                        <div className="flex justify-end">
+                          <div
+                            className="max-w-[85%] rounded-2xl px-4 py-3"
+                            style={{ background: 'var(--accent)', color: 'white' }}
+                          >
+                            <p className="text-sm leading-relaxed">{message.content}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div
+                            className="rounded-2xl px-4 py-3"
+                            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                          >
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                              {message.content}
+                            </p>
+
+                            {message.sources && message.sources.length > 0 && (
+                              <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+                                <div className="flex flex-wrap gap-2">
+                                  {message.sources.map((source, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
+                                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                                    >
+                                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                      </svg>
+                                      {source.source}
+                                      {source.page && <span style={{ color: 'var(--text-tertiary)' }}>p.{source.page}</span>}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {message.provider && (
+                            <p className="px-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                              {message.provider}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {isLoading && (
+                    <div className="animate-fade-in">
+                      <div
+                        className="inline-flex items-center gap-1 rounded-2xl px-4 py-3"
+                        style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)' }} />
+                        <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.2s' }} />
+                        <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.4s' }} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+          </main>
+
+          {/* Input Area */}
+          <footer className="px-6 pb-6">
+            <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
+              <div
+                className="flex items-center gap-3 rounded-xl px-4 py-3"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+              >
+                {messages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearChat}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-all cursor-pointer"
+                    style={{ color: 'var(--text-tertiary)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    title="Delete conversation"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask a question..."
+                  className="flex-1 bg-transparent text-sm outline-none"
+                  style={{ color: 'var(--text-primary)' }}
+                  disabled={isLoading}
+                />
+                <button
+                  type="submit"
+                  disabled={isLoading || !input.trim()}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-all disabled:opacity-30 cursor-pointer"
+                  style={{ background: 'var(--accent)' }}
+                >
+                  <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </form>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 }
