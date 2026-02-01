@@ -46,6 +46,7 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
+  const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -104,11 +105,35 @@ export default function Home() {
       if (e.lengthComputable) {
         const percent = Math.round((e.loaded / e.total) * 100);
         setUploadProgress({ fileName: file.name, progress: percent });
-        updateToast(toastId, { subMessage: `${percent}%` });
+
+        if (percent === 100) {
+          // Switch to processing message when upload completes
+          updateToast(toastId, {
+            message: `Processing ${file.name}`,
+            subMessage: "Extracting text & creating chunks..."
+          });
+
+          // Animate dots to show activity
+          let dots = 0;
+          processingIntervalRef.current = setInterval(() => {
+            dots = (dots + 1) % 4;
+            updateToast(toastId, {
+              subMessage: `Extracting text & creating chunks${'.'.repeat(dots)}`
+            });
+          }, 500);
+        } else {
+          updateToast(toastId, { subMessage: `${percent}%` });
+        }
       }
     });
 
     xhr.addEventListener("load", () => {
+      // Clear the processing animation interval
+      if (processingIntervalRef.current) {
+        clearInterval(processingIntervalRef.current);
+        processingIntervalRef.current = null;
+      }
+
       try {
         const data = JSON.parse(xhr.responseText);
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -135,6 +160,12 @@ export default function Home() {
     });
 
     xhr.addEventListener("error", () => {
+      // Clear the processing animation interval
+      if (processingIntervalRef.current) {
+        clearInterval(processingIntervalRef.current);
+        processingIntervalRef.current = null;
+      }
+
       removeToast(toastId);
       addToast({ type: "error", message: "Upload failed", subMessage: "Could not connect to server" });
       setUploadProgress(null);
@@ -571,38 +602,44 @@ export default function Home() {
           <footer className="px-6 pb-6">
             <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
               <div
-                className="flex items-center gap-3 rounded-xl px-4 py-3"
-                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                className="flex items-end gap-3 rounded-xl px-4 py-4 cursor-text"
+                style={{ background: 'var(--bg-secondary)', minHeight: '56px' }}
+                onClick={(e) => {
+                  const textarea = e.currentTarget.querySelector('textarea');
+                  if (textarea) textarea.focus();
+                }}
               >
-                {messages.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearChat}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg transition-all cursor-pointer"
-                    style={{ color: 'var(--text-tertiary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    title="Delete conversation"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-                <input
-                  type="text"
+                <textarea
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim() && !isLoading) {
+                        handleSubmit(e);
+                      }
+                    }
+                  }}
                   placeholder="Ask a question..."
-                  className="flex-1 bg-transparent text-sm outline-none"
-                  style={{ color: 'var(--text-primary)' }}
+                  className="flex-1 bg-transparent text-sm outline-none resize-none leading-relaxed"
+                  style={{
+                    color: 'var(--text-primary)',
+                    minHeight: '24px',
+                    maxHeight: '120px'
+                  }}
                   disabled={isLoading}
+                  rows={1}
                 />
                 <button
                   type="submit"
                   disabled={isLoading || !input.trim()}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg transition-all disabled:opacity-30 cursor-pointer"
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-all disabled:opacity-30 cursor-pointer"
                   style={{ background: 'var(--accent)' }}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
