@@ -51,6 +51,11 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 USE_OLLAMA_FALLBACK = os.getenv("USE_OLLAMA_FALLBACK", "false").lower() == "true"
 
+# LLM generation settings
+LLM_MAX_TOKENS = 2048  # Max response tokens
+LLM_TEMPERATURE = 0.3  # Lower = more focused, higher = more creative
+LLM_TIMEOUT = 60.0  # Timeout in seconds for LLM API calls
+
 # Prompt template
 SYSTEM_PROMPT = """You are an assistant that answers ONLY from the provided context.
 If the answer is not in the context, say "I don't have this information in my knowledge base."

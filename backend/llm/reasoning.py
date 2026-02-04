@@ -4,7 +4,8 @@ from groq import Groq
 from backend.config import (
     OLLAMA_BASE_URL, OLLAMA_MODEL,
     GROQ_API_KEY, GROQ_MODEL,
-    USE_OLLAMA_FALLBACK, SYSTEM_PROMPT
+    USE_OLLAMA_FALLBACK, SYSTEM_PROMPT,
+    LLM_MAX_TOKENS, LLM_TEMPERATURE, LLM_TIMEOUT
 )
 
 
@@ -58,8 +59,8 @@ Answer the question based on the context above. Do NOT include source citations 
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
-                max_tokens=2048
+                temperature=LLM_TEMPERATURE,
+                max_tokens=LLM_MAX_TOKENS
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -69,7 +70,7 @@ Answer the question based on the context above. Do NOT include source citations 
     async def _call_ollama(self, prompt: str) -> Optional[str]:
         """Call Ollama API (optional local fallback)."""
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
                 response = await client.post(
                     f"{self.ollama_url}/api/generate",
                     json={
@@ -88,7 +89,7 @@ Answer the question based on the context above. Do NOT include source citations 
     def _call_ollama_sync(self, prompt: str) -> Optional[str]:
         """Call Ollama API synchronously."""
         try:
-            with httpx.Client(timeout=60.0) as client:
+            with httpx.Client(timeout=LLM_TIMEOUT) as client:
                 response = client.post(
                     f"{self.ollama_url}/api/generate",
                     json={

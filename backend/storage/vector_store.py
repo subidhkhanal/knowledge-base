@@ -7,6 +7,14 @@ from backend.config import (
     COHERE_API_KEY, COHERE_EMBED_MODEL, COHERE_EMBED_DIMENSION
 )
 
+# API batch size limits
+COHERE_EMBED_BATCH_SIZE = 96  # Cohere API limit per request
+PINECONE_UPSERT_BATCH_SIZE = 100  # Pinecone recommended batch size
+PINECONE_DELETE_BATCH_SIZE = 100  # Pinecone delete batch size
+
+# Query limits (free tier workaround - no "list all" API)
+PINECONE_MAX_QUERY_RESULTS = 10000  # Max results per query
+
 
 class VectorStore:
     """Pinecone vector store with semantic search and user isolation."""
@@ -69,8 +77,7 @@ class VectorStore:
         if not texts:
             return []
 
-        # Cohere has a limit of 96 texts per batch
-        batch_size = 96
+        batch_size = COHERE_EMBED_BATCH_SIZE
         all_embeddings = []
 
         for i in range(0, len(texts), batch_size):
@@ -114,7 +121,6 @@ class VectorStore:
                 "source_type": str(doc.get("source_type", "unknown")),
                 "chunk_index": int(doc.get("chunk_index", 0)),
                 "total_chunks": int(doc.get("total_chunks", 1)),
-                "text": doc["text"][:1000]  # Store truncated text in metadata for retrieval
             }
 
             if doc.get("page") is not None:
@@ -142,10 +148,9 @@ class VectorStore:
                 "metadata": metadata
             })
 
-        # Upsert in batches of 100
-        batch_size = 100
-        for i in range(0, len(vectors), batch_size):
-            batch = vectors[i:i + batch_size]
+        # Upsert in batches
+        for i in range(0, len(vectors), PINECONE_UPSERT_BATCH_SIZE):
+            batch = vectors[i:i + PINECONE_UPSERT_BATCH_SIZE]
             self.index.upsert(vectors=batch)
 
         return ids
@@ -204,38 +209,6 @@ class VectorStore:
 
         return documents
 
-    def hybrid_search(
-        self,
-        query: str,
-        user_id: str,
-        top_k: int = TOP_K,
-        threshold: float = SIMILARITY_THRESHOLD,
-        source_filter: Optional[str] = None,
-        **kwargs  # Accept but ignore BM25-related params for backward compatibility
-    ) -> List[Dict[str, Any]]:
-        """
-        Search for documents. On Pinecone free tier, this is semantic-only.
-        BM25 hybrid search requires Pinecone paid tier.
-
-        Args:
-            query: Search query
-            user_id: The user's unique identifier
-            top_k: Number of results to return
-            threshold: Minimum similarity score
-            source_filter: Optional filter by source name
-
-        Returns:
-            List of matching documents with scores
-        """
-        # On free tier, hybrid search is just semantic search
-        return self.search(
-            query=query,
-            user_id=user_id,
-            top_k=top_k,
-            threshold=threshold,
-            source_filter=source_filter
-        )
-
     def get_all_sources(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all unique sources for a specific user."""
         # Query with a dummy vector to get all documents for the user
@@ -251,7 +224,7 @@ class VectorStore:
             dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
             results = self.index.query(
                 vector=dummy_vector,
-                top_k=10000,  # Get many results
+                top_k=PINECONE_MAX_QUERY_RESULTS,  # Get many results
                 include_metadata=True,
                 filter={"user_id": {"$eq": user_id}}
             )
@@ -287,7 +260,7 @@ class VectorStore:
         dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
         results = self.index.query(
             vector=dummy_vector,
-            top_k=10000,
+            top_k=PINECONE_MAX_QUERY_RESULTS,
             include_metadata=False,
             filter={
                 "$and": [
@@ -303,9 +276,8 @@ class VectorStore:
         ids_to_delete = [match.id for match in results.matches]
 
         # Delete in batches
-        batch_size = 100
-        for i in range(0, len(ids_to_delete), batch_size):
-            batch = ids_to_delete[i:i + batch_size]
+        for i in range(0, len(ids_to_delete), PINECONE_DELETE_BATCH_SIZE):
+            batch = ids_to_delete[i:i + PINECONE_DELETE_BATCH_SIZE]
             self.index.delete(ids=batch)
 
         return len(ids_to_delete)
@@ -325,7 +297,7 @@ class VectorStore:
             dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
             results = self.index.query(
                 vector=dummy_vector,
-                top_k=10000,
+                top_k=PINECONE_MAX_QUERY_RESULTS,
                 include_metadata=False,
                 filter={"user_id": {"$eq": user_id}}
             )
@@ -349,7 +321,7 @@ class VectorStore:
         dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
         results = self.index.query(
             vector=dummy_vector,
-            top_k=10000,
+            top_k=PINECONE_MAX_QUERY_RESULTS,
             include_metadata=True,
             filter={
                 "$and": [

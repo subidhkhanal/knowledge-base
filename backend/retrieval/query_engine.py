@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from backend.storage.vector_store import VectorStore
 from backend.llm.reasoning import LLMReasoning
 from backend.retrieval.reranker import Reranker
@@ -12,6 +12,56 @@ class QueryEngine:
         self.vector_store = VectorStore()
         self.llm = LLMReasoning()
         self.reranker = Reranker()
+
+    def _retrieve_and_rerank(
+        self,
+        question: str,
+        user_id: str,
+        top_k: int,
+        threshold: float,
+        source_filter: Optional[str],
+        use_reranking: bool
+    ) -> tuple[List[Dict[str, Any]], bool]:
+        """Retrieve chunks and optionally rerank them."""
+        # Get more chunks if reranking (reranker will filter down)
+        retrieve_k = top_k * 2 if use_reranking and self.reranker.is_available() else top_k
+
+        chunks = self.vector_store.search(
+            query=question,
+            user_id=user_id,
+            top_k=retrieve_k,
+            threshold=threshold,
+            source_filter=source_filter
+        )
+
+        # Rerank if enabled and available
+        reranked = False
+        if use_reranking and self.reranker.is_available() and chunks:
+            chunks = self.reranker.rerank(
+                query=question,
+                documents=chunks,
+                top_k=RERANK_TOP_K
+            )
+            reranked = True
+
+        return chunks, reranked
+
+    def _format_response(
+        self,
+        question: str,
+        result: Dict[str, Any],
+        chunks: List[Dict[str, Any]],
+        reranked: bool
+    ) -> Dict[str, Any]:
+        """Format the final response."""
+        return {
+            "question": question,
+            "answer": result["answer"],
+            "sources": result["sources"],
+            "chunks_used": len(chunks),
+            "provider": result["provider"],
+            "reranked": reranked
+        }
 
     async def query(
         self,
@@ -36,42 +86,13 @@ class QueryEngine:
         Returns:
             Dict with 'answer', 'sources', 'chunks_used', and 'provider'
         """
-        # Step 1: Retrieve relevant chunks using semantic search
-        # Get more chunks if reranking (reranker will filter down)
-        retrieve_k = top_k * 2 if use_reranking and self.reranker.is_available() else top_k
-
-        chunks = self.vector_store.search(
-            query=question,
-            user_id=user_id,
-            top_k=retrieve_k,
-            threshold=threshold,
-            source_filter=source_filter
+        chunks, reranked = self._retrieve_and_rerank(
+            question, user_id, top_k, threshold, source_filter, use_reranking
         )
 
-        # Step 2: Rerank if enabled and available
-        reranked = False
-        if use_reranking and self.reranker.is_available() and chunks:
-            chunks = self.reranker.rerank(
-                query=question,
-                documents=chunks,
-                top_k=RERANK_TOP_K
-            )
-            reranked = True
+        result = await self.llm.generate_response(query=question, chunks=chunks)
 
-        # Step 3: Generate response with LLM
-        result = await self.llm.generate_response(
-            query=question,
-            chunks=chunks
-        )
-
-        return {
-            "question": question,
-            "answer": result["answer"],
-            "sources": result["sources"],
-            "chunks_used": len(chunks),
-            "provider": result["provider"],
-            "reranked": reranked
-        }
+        return self._format_response(question, result, chunks, reranked)
 
     def query_sync(
         self,
@@ -83,39 +104,10 @@ class QueryEngine:
         use_reranking: bool = USE_RERANKING
     ) -> Dict[str, Any]:
         """Synchronous version of query for a specific user."""
-        # Step 1: Retrieve relevant chunks using semantic search
-        # Get more chunks if reranking (reranker will filter down)
-        retrieve_k = top_k * 2 if use_reranking and self.reranker.is_available() else top_k
-
-        chunks = self.vector_store.search(
-            query=question,
-            user_id=user_id,
-            top_k=retrieve_k,
-            threshold=threshold,
-            source_filter=source_filter
+        chunks, reranked = self._retrieve_and_rerank(
+            question, user_id, top_k, threshold, source_filter, use_reranking
         )
 
-        # Step 2: Rerank if enabled and available
-        reranked = False
-        if use_reranking and self.reranker.is_available() and chunks:
-            chunks = self.reranker.rerank(
-                query=question,
-                documents=chunks,
-                top_k=RERANK_TOP_K
-            )
-            reranked = True
+        result = self.llm.generate_response_sync(query=question, chunks=chunks)
 
-        # Step 3: Generate response with LLM
-        result = self.llm.generate_response_sync(
-            query=question,
-            chunks=chunks
-        )
-
-        return {
-            "question": question,
-            "answer": result["answer"],
-            "sources": result["sources"],
-            "chunks_used": len(chunks),
-            "provider": result["provider"],
-            "reranked": reranked
-        }
+        return self._format_response(question, result, chunks, reranked)

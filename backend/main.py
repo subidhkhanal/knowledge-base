@@ -197,16 +197,43 @@ async def upload_document(
         )
 
     # Extract text using appropriate processor
-    documents = processor.process_bytes(content, file.filename)
+    try:
+        documents = processor.process_bytes(content, file.filename)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to read {ext} file: {str(e)}. The file may be corrupted or password-protected."
+        )
 
     if not documents:
-        raise HTTPException(status_code=400, detail=f"No text could be extracted from the file")
+        raise HTTPException(
+            status_code=400,
+            detail=f"No text found in '{file.filename}'. The file may be empty, contain only images, or be in an unsupported format."
+        )
 
     # Chunk the documents
-    chunks = components["chunker"].chunk_documents(documents)
+    try:
+        chunks = components["chunker"].chunk_documents(documents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process text into chunks: {str(e)}"
+        )
+
+    if not chunks:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No content to store. The extracted text from '{file.filename}' was too short."
+        )
 
     # Store in vector database with user_id
-    components["vector_store"].add_documents(chunks, user_id=user_id)
+    try:
+        components["vector_store"].add_documents(chunks, user_id=user_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to store document: {str(e)}. Please try again later."
+        )
 
     return UploadResponse(
         message=f"{ext.upper()[1:]} processed successfully",
@@ -238,10 +265,28 @@ async def upload_text(
     documents = components["text"].process_text(request.content, request.title)
 
     # Chunk the documents
-    chunks = components["chunker"].chunk_documents(documents)
+    try:
+        chunks = components["chunker"].chunk_documents(documents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process text into chunks: {str(e)}"
+        )
+
+    if not chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="Text is too short to store. Please provide more content."
+        )
 
     # Store in vector database with user_id
-    components["vector_store"].add_documents(chunks, user_id=user_id)
+    try:
+        components["vector_store"].add_documents(chunks, user_id=user_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to store text: {str(e)}. Please try again later."
+        )
 
     return UploadResponse(
         message="Text processed successfully",
