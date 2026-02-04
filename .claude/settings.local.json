@@ -24,7 +24,8 @@
       "Bash(find:*)",
       "Bash(dir /b \"c:\\\\personal-assistant\")",
       "Bash(dir \"c:\\\\personal-assistant\")",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(python -m uvicorn:*)"
     ]
   }
 }

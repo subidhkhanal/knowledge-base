@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from backend.storage.vector_store import VectorStore
 from backend.llm.reasoning import LLMReasoning
 from backend.retrieval.reranker import Reranker
-from backend.config import TOP_K, SIMILARITY_THRESHOLD, USE_HYBRID_SEARCH, USE_RERANKING, RERANK_TOP_K
+from backend.config import TOP_K, SIMILARITY_THRESHOLD, USE_RERANKING, RERANK_TOP_K
 
 
 class QueryEngine:
@@ -20,7 +20,6 @@ class QueryEngine:
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None,
-        use_hybrid: bool = USE_HYBRID_SEARCH,
         use_reranking: bool = USE_RERANKING
     ) -> Dict[str, Any]:
         """
@@ -32,32 +31,22 @@ class QueryEngine:
             top_k: Number of chunks to retrieve
             threshold: Minimum similarity threshold
             source_filter: Optional filter by source name
-            use_hybrid: Use hybrid search (semantic + BM25) - defaults to config
             use_reranking: Use Cohere reranking - defaults to config
 
         Returns:
             Dict with 'answer', 'sources', 'chunks_used', and 'provider'
         """
-        # Step 1: Retrieve relevant chunks using hybrid or semantic search
+        # Step 1: Retrieve relevant chunks using semantic search
         # Get more chunks if reranking (reranker will filter down)
         retrieve_k = top_k * 2 if use_reranking and self.reranker.is_available() else top_k
 
-        if use_hybrid:
-            chunks = self.vector_store.hybrid_search(
-                query=question,
-                user_id=user_id,
-                top_k=retrieve_k,
-                threshold=threshold,
-                source_filter=source_filter
-            )
-        else:
-            chunks = self.vector_store.search(
-                query=question,
-                user_id=user_id,
-                top_k=retrieve_k,
-                threshold=threshold,
-                source_filter=source_filter
-            )
+        chunks = self.vector_store.search(
+            query=question,
+            user_id=user_id,
+            top_k=retrieve_k,
+            threshold=threshold,
+            source_filter=source_filter
+        )
 
         # Step 2: Rerank if enabled and available
         reranked = False
@@ -91,30 +80,20 @@ class QueryEngine:
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None,
-        use_hybrid: bool = USE_HYBRID_SEARCH,
         use_reranking: bool = USE_RERANKING
     ) -> Dict[str, Any]:
         """Synchronous version of query for a specific user."""
-        # Step 1: Retrieve relevant chunks using hybrid or semantic search
+        # Step 1: Retrieve relevant chunks using semantic search
         # Get more chunks if reranking (reranker will filter down)
         retrieve_k = top_k * 2 if use_reranking and self.reranker.is_available() else top_k
 
-        if use_hybrid:
-            chunks = self.vector_store.hybrid_search(
-                query=question,
-                user_id=user_id,
-                top_k=retrieve_k,
-                threshold=threshold,
-                source_filter=source_filter
-            )
-        else:
-            chunks = self.vector_store.search(
-                query=question,
-                user_id=user_id,
-                top_k=retrieve_k,
-                threshold=threshold,
-                source_filter=source_filter
-            )
+        chunks = self.vector_store.search(
+            query=question,
+            user_id=user_id,
+            top_k=retrieve_k,
+            threshold=threshold,
+            source_filter=source_filter
+        )
 
         # Step 2: Rerank if enabled and available
         reranked = False

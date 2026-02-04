@@ -7,13 +7,9 @@ load_dotenv()
 # Base paths
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
-CHROMADB_DIR = DATA_DIR / "chromadb"
-
-# Chat history database
-CHAT_DB_PATH = DATA_DIR / "chat_history.db"
 
 # Ensure directories exist
-CHROMADB_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Upload settings
 MAX_UPLOAD_SIZE_MB = 10
@@ -27,16 +23,21 @@ CHUNK_OVERLAP = 150  # tokens
 TOP_K = 5  # Number of chunks to retrieve
 SIMILARITY_THRESHOLD = 0.3  # Minimum similarity score
 
-# Hybrid search settings
-USE_HYBRID_SEARCH = os.getenv("USE_HYBRID_SEARCH", "true").lower() == "true"
-SEMANTIC_WEIGHT = float(os.getenv("SEMANTIC_WEIGHT", "0.5"))  # Weight for semantic search (0-1)
-BM25_WEIGHT = float(os.getenv("BM25_WEIGHT", "0.5"))  # Weight for BM25 keyword search (0-1)
-HYBRID_MIN_THRESHOLD = float(os.getenv("HYBRID_MIN_THRESHOLD", "0.35"))  # Min semantic similarity for hybrid results
+# Pinecone settings (free tier: 100K vectors, 1 index)
+# Get your free API key at https://app.pinecone.io
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "knowledge-base")
 
-# Re-ranking settings (Cohere free tier: 1000 req/month)
+# Cohere settings (free tier: 1000 req/month for rerank, embed has separate limits)
 # Get your free API key at https://dashboard.cohere.com/api-keys
-USE_RERANKING = os.getenv("USE_RERANKING", "true").lower() == "true"
 COHERE_API_KEY = os.getenv("COHERE_API_KEY", "")
+
+# Embedding settings (using Cohere API)
+COHERE_EMBED_MODEL = os.getenv("COHERE_EMBED_MODEL", "embed-english-v3.0")
+COHERE_EMBED_DIMENSION = 1024  # embed-english-v3.0 dimension
+
+# Re-ranking settings
+USE_RERANKING = os.getenv("USE_RERANKING", "true").lower() == "true"
 RERANK_MODEL = os.getenv("RERANK_MODEL", "rerank-english-v3.0")
 RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))  # Final number of results after reranking
 

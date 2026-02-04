@@ -1,66 +1,88 @@
 from typing import List, Dict, Any, Optional
 import uuid
-import re
-import chromadb
-from rank_bm25 import BM25Okapi
-from backend.config import CHROMADB_DIR, TOP_K, SIMILARITY_THRESHOLD, SEMANTIC_WEIGHT, BM25_WEIGHT, HYBRID_MIN_THRESHOLD
+import cohere
+from pinecone import Pinecone, ServerlessSpec
+from backend.config import (
+    TOP_K, SIMILARITY_THRESHOLD, PINECONE_API_KEY, PINECONE_INDEX_NAME,
+    COHERE_API_KEY, COHERE_EMBED_MODEL, COHERE_EMBED_DIMENSION
+)
 
 
 class VectorStore:
-    """ChromaDB vector store with hybrid search (semantic + BM25) and user isolation."""
+    """Pinecone vector store with semantic search and user isolation."""
 
-    def __init__(self, collection_name: str = "knowledge_base"):
-        self.client = chromadb.PersistentClient(path=str(CHROMADB_DIR))
-        # Use ChromaDB's default embedding function (lightweight, no PyTorch needed)
-        self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            metadata={"hnsw:space": "cosine"}
+    def __init__(self):
+        if not PINECONE_API_KEY:
+            raise ValueError(
+                "PINECONE_API_KEY is required. "
+                "Get a free API key at https://app.pinecone.io"
+            )
+
+        if not COHERE_API_KEY:
+            raise ValueError(
+                "COHERE_API_KEY is required for embeddings. "
+                "Get a free API key at https://dashboard.cohere.com/api-keys"
+            )
+
+        # Initialize Pinecone
+        self.pc = Pinecone(api_key=PINECONE_API_KEY)
+
+        # Initialize Cohere for embeddings
+        self.cohere_client = cohere.Client(COHERE_API_KEY)
+        self.embed_model = COHERE_EMBED_MODEL
+
+        # Create index if it doesn't exist
+        if PINECONE_INDEX_NAME not in self.pc.list_indexes().names():
+            self.pc.create_index(
+                name=PINECONE_INDEX_NAME,
+                dimension=COHERE_EMBED_DIMENSION,
+                metric="cosine",
+                spec=ServerlessSpec(
+                    cloud="aws",
+                    region="us-east-1"  # Free tier region
+                )
+            )
+
+        # Connect to index
+        self.index = self.pc.Index(PINECONE_INDEX_NAME)
+
+    def _get_embedding(self, text: str) -> List[float]:
+        """Get embedding for a single text using Cohere."""
+        response = self.cohere_client.embed(
+            texts=[text],
+            model=self.embed_model,
+            input_type="search_document"
         )
-        # BM25 index (built lazily per user)
-        self._bm25_cache = {}  # user_id -> {index, docs, ids, metadatas}
+        return response.embeddings[0]
 
-    def _tokenize(self, text: str) -> List[str]:
-        """Simple tokenizer for BM25."""
-        # Lowercase and split on non-alphanumeric characters
-        text = text.lower()
-        tokens = re.findall(r'\b\w+\b', text)
-        return tokens
-
-    def _build_bm25_index(self, user_id: str):
-        """Build or rebuild the BM25 index for a specific user."""
-        results = self.collection.get(
-            where={"user_id": user_id},
-            include=["documents", "metadatas"]
+    def _get_query_embedding(self, text: str) -> List[float]:
+        """Get embedding for a query using Cohere."""
+        response = self.cohere_client.embed(
+            texts=[text],
+            model=self.embed_model,
+            input_type="search_query"
         )
+        return response.embeddings[0]
 
-        if not results["documents"]:
-            self._bm25_cache[user_id] = {
-                "index": None,
-                "docs": [],
-                "ids": [],
-                "metadatas": []
-            }
-            return
+    def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for multiple texts using Cohere."""
+        if not texts:
+            return []
 
-        docs = results["documents"]
-        ids = results["ids"]
-        metadatas = results["metadatas"]
+        # Cohere has a limit of 96 texts per batch
+        batch_size = 96
+        all_embeddings = []
 
-        # Tokenize all documents
-        tokenized_docs = [self._tokenize(doc) for doc in docs]
-        index = BM25Okapi(tokenized_docs)
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            response = self.cohere_client.embed(
+                texts=batch,
+                model=self.embed_model,
+                input_type="search_document"
+            )
+            all_embeddings.extend(response.embeddings)
 
-        self._bm25_cache[user_id] = {
-            "index": index,
-            "docs": docs,
-            "ids": ids,
-            "metadatas": metadatas
-        }
-
-    def _invalidate_bm25_index(self, user_id: str):
-        """Invalidate the BM25 index for a user so it gets rebuilt on next search."""
-        if user_id in self._bm25_cache:
-            del self._bm25_cache[user_id]
+        return all_embeddings
 
     def add_documents(self, documents: List[Dict[str, Any]], user_id: str) -> List[str]:
         """
@@ -85,13 +107,14 @@ class VectorStore:
             ids.append(doc_id)
             texts.append(doc["text"])
 
-            # Prepare metadata (ChromaDB only supports str, int, float, bool)
+            # Prepare metadata
             metadata = {
-                "user_id": user_id,  # User isolation
+                "user_id": user_id,
                 "source": str(doc.get("source", "unknown")),
                 "source_type": str(doc.get("source_type", "unknown")),
                 "chunk_index": int(doc.get("chunk_index", 0)),
                 "total_chunks": int(doc.get("total_chunks", 1)),
+                "text": doc["text"][:1000]  # Store truncated text in metadata for retrieval
             }
 
             if doc.get("page") is not None:
@@ -105,14 +128,25 @@ class VectorStore:
 
             metadatas.append(metadata)
 
-        self.collection.add(
-            ids=ids,
-            documents=texts,
-            metadatas=metadatas
-        )
+        # Get embeddings for all texts
+        embeddings = self._get_embeddings_batch(texts)
 
-        # Invalidate BM25 index for this user
-        self._invalidate_bm25_index(user_id)
+        # Prepare vectors for upsert
+        vectors = []
+        for doc_id, embedding, metadata, text in zip(ids, embeddings, metadatas, texts):
+            # Store full text in metadata (Pinecone allows up to 40KB per vector)
+            metadata["text"] = text
+            vectors.append({
+                "id": doc_id,
+                "values": embedding,
+                "metadata": metadata
+            })
+
+        # Upsert in batches of 100
+        batch_size = 100
+        for i in range(0, len(vectors), batch_size):
+            batch = vectors[i:i + batch_size]
+            self.index.upsert(vectors=batch)
 
         return ids
 
@@ -137,102 +171,36 @@ class VectorStore:
         Returns:
             List of matching documents with scores
         """
-        # Build where filter with user_id
-        if source_filter:
-            where_filter = {"$and": [{"user_id": user_id}, {"source": source_filter}]}
-        else:
-            where_filter = {"user_id": user_id}
+        # Get query embedding
+        query_embedding = self._get_query_embedding(query)
 
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=top_k,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
+        # Build filter
+        filter_dict = {"user_id": {"$eq": user_id}}
+        if source_filter:
+            filter_dict["source"] = {"$eq": source_filter}
+
+        # Query Pinecone
+        results = self.index.query(
+            vector=query_embedding,
+            top_k=top_k,
+            include_metadata=True,
+            filter=filter_dict
         )
 
         documents = []
-        if results["documents"] and results["documents"][0]:
-            for i, (doc, metadata, distance) in enumerate(zip(
-                results["documents"][0],
-                results["metadatas"][0],
-                results["distances"][0]
-            )):
-                # Convert distance to similarity (cosine distance to similarity)
-                similarity = 1 - distance
+        for match in results.matches:
+            similarity = match.score  # Pinecone returns similarity score directly for cosine
 
-                if similarity >= threshold:
-                    documents.append({
-                        "text": doc,
-                        "metadata": metadata,
-                        "similarity": similarity,
-                        "id": results["ids"][0][i] if results["ids"] else None
-                    })
+            if similarity >= threshold:
+                metadata = match.metadata.copy()
+                text = metadata.pop("text", "")
 
-        return documents
-
-    def bm25_search(
-        self,
-        query: str,
-        user_id: str,
-        top_k: int = TOP_K,
-        source_filter: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        BM25 keyword search for a specific user.
-
-        Args:
-            query: Search query
-            user_id: The user's unique identifier
-            top_k: Number of results to return
-            source_filter: Optional filter by source name
-
-        Returns:
-            List of matching documents with BM25 scores
-        """
-        # Build index if not exists for this user
-        if user_id not in self._bm25_cache:
-            self._build_bm25_index(user_id)
-
-        cache = self._bm25_cache.get(user_id, {})
-        if not cache.get("docs"):
-            return []
-
-        index = cache["index"]
-        docs = cache["docs"]
-        ids = cache["ids"]
-        metadatas = cache["metadatas"]
-
-        # Tokenize query
-        query_tokens = self._tokenize(query)
-
-        # Get BM25 scores for all documents
-        scores = index.get_scores(query_tokens)
-
-        # Create list of (index, score) and sort by score descending
-        scored_docs = [(i, score) for i, score in enumerate(scores)]
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-
-        # Filter and collect results
-        documents = []
-        for idx, score in scored_docs[:top_k * 2]:  # Get more to account for filtering
-            if score <= 0:
-                continue
-
-            metadata = metadatas[idx]
-
-            # Apply source filter
-            if source_filter and metadata.get("source") != source_filter:
-                continue
-
-            documents.append({
-                "text": docs[idx],
-                "metadata": metadata,
-                "bm25_score": score,
-                "id": ids[idx]
-            })
-
-            if len(documents) >= top_k:
-                break
+                documents.append({
+                    "text": text,
+                    "metadata": metadata,
+                    "similarity": similarity,
+                    "id": match.id
+                })
 
         return documents
 
@@ -243,124 +211,64 @@ class VectorStore:
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None,
-        semantic_weight: float = SEMANTIC_WEIGHT,
-        bm25_weight: float = BM25_WEIGHT,
-        rrf_k: int = 60
+        **kwargs  # Accept but ignore BM25-related params for backward compatibility
     ) -> List[Dict[str, Any]]:
         """
-        Hybrid search combining semantic and BM25 keyword search using Reciprocal Rank Fusion.
+        Search for documents. On Pinecone free tier, this is semantic-only.
+        BM25 hybrid search requires Pinecone paid tier.
 
         Args:
             query: Search query
             user_id: The user's unique identifier
             top_k: Number of results to return
-            threshold: Minimum similarity score for semantic search
+            threshold: Minimum similarity score
             source_filter: Optional filter by source name
-            semantic_weight: Weight for semantic search results (0-1)
-            bm25_weight: Weight for BM25 search results (0-1)
-            rrf_k: RRF constant (higher = more weight to lower-ranked results)
 
         Returns:
-            List of matching documents with combined scores
+            List of matching documents with scores
         """
-        # Get results from both search methods
-        semantic_results = self.search(
+        # On free tier, hybrid search is just semantic search
+        return self.search(
             query=query,
             user_id=user_id,
-            top_k=top_k * 2,  # Get more to have better fusion
+            top_k=top_k,
             threshold=threshold,
             source_filter=source_filter
         )
 
-        bm25_results = self.bm25_search(
-            query=query,
-            user_id=user_id,
-            top_k=top_k * 2,
-            source_filter=source_filter
-        )
-
-        # Calculate RRF scores
-        # RRF formula: score = sum(1 / (k + rank)) for each result list
-        doc_scores = {}  # id -> {score, doc_data}
-
-        # Process semantic results
-        for rank, doc in enumerate(semantic_results):
-            doc_id = doc["id"]
-            rrf_score = semantic_weight * (1 / (rrf_k + rank + 1))
-
-            if doc_id not in doc_scores:
-                doc_scores[doc_id] = {
-                    "text": doc["text"],
-                    "metadata": doc["metadata"],
-                    "id": doc_id,
-                    "rrf_score": 0,
-                    "semantic_similarity": doc.get("similarity", 0),
-                    "bm25_score": 0
-                }
-            doc_scores[doc_id]["rrf_score"] += rrf_score
-            doc_scores[doc_id]["semantic_similarity"] = doc.get("similarity", 0)
-
-        # Process BM25 results
-        for rank, doc in enumerate(bm25_results):
-            doc_id = doc["id"]
-            rrf_score = bm25_weight * (1 / (rrf_k + rank + 1))
-
-            if doc_id not in doc_scores:
-                doc_scores[doc_id] = {
-                    "text": doc["text"],
-                    "metadata": doc["metadata"],
-                    "id": doc_id,
-                    "rrf_score": 0,
-                    "semantic_similarity": 0,
-                    "bm25_score": 0
-                }
-            doc_scores[doc_id]["rrf_score"] += rrf_score
-            doc_scores[doc_id]["bm25_score"] = doc.get("bm25_score", 0)
-
-        # Sort by RRF score and return top_k
-        sorted_docs = sorted(
-            doc_scores.values(),
-            key=lambda x: x["rrf_score"],
-            reverse=True
-        )
-
-        # Filter out results with low semantic similarity to avoid irrelevant sources
-        sorted_docs = [
-            doc for doc in sorted_docs
-            if doc["semantic_similarity"] >= HYBRID_MIN_THRESHOLD
-        ]
-
-        # Format output with combined similarity score
-        results = []
-        for doc in sorted_docs[:top_k]:
-            results.append({
-                "text": doc["text"],
-                "metadata": doc["metadata"],
-                "similarity": doc["rrf_score"],  # Use RRF score as similarity
-                "id": doc["id"],
-                "semantic_similarity": doc["semantic_similarity"],
-                "bm25_score": doc["bm25_score"]
-            })
-
-        return results
-
     def get_all_sources(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all unique sources for a specific user."""
-        results = self.collection.get(
-            where={"user_id": user_id},
-            include=["metadatas"]
-        )
-
+        # Query with a dummy vector to get all documents for the user
+        # We'll use pagination to handle large datasets
         sources = {}
-        for metadata in results["metadatas"]:
-            source = metadata.get("source", "unknown")
-            if source not in sources:
-                sources[source] = {
-                    "source": source,
-                    "source_type": metadata.get("source_type", "unknown"),
-                    "chunk_count": 0
-                }
-            sources[source]["chunk_count"] += 1
+
+        # Use list with pagination
+        # Note: Pinecone doesn't have a direct "get all" - we need to query
+        # We'll do a broad query and aggregate
+        try:
+            # Get a sample of vectors to find sources
+            # Using a zero vector query with large top_k
+            dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
+            results = self.index.query(
+                vector=dummy_vector,
+                top_k=10000,  # Get many results
+                include_metadata=True,
+                filter={"user_id": {"$eq": user_id}}
+            )
+
+            for match in results.matches:
+                metadata = match.metadata
+                source = metadata.get("source", "unknown")
+                if source not in sources:
+                    sources[source] = {
+                        "source": source,
+                        "source_type": metadata.get("source_type", "unknown"),
+                        "chunk_count": 0
+                    }
+                sources[source]["chunk_count"] += 1
+
+        except Exception as e:
+            print(f"Error getting sources: {e}")
 
         return list(sources.values())
 
@@ -375,18 +283,32 @@ class VectorStore:
         Returns:
             Number of documents deleted
         """
-        results = self.collection.get(
-            where={"$and": [{"user_id": user_id}, {"source": source_name}]},
-            include=[]
+        # First, find all IDs matching the filter
+        dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
+        results = self.index.query(
+            vector=dummy_vector,
+            top_k=10000,
+            include_metadata=False,
+            filter={
+                "$and": [
+                    {"user_id": {"$eq": user_id}},
+                    {"source": {"$eq": source_name}}
+                ]
+            }
         )
 
-        if results["ids"]:
-            self.collection.delete(ids=results["ids"])
-            # Invalidate BM25 index for this user
-            self._invalidate_bm25_index(user_id)
-            return len(results["ids"])
+        if not results.matches:
+            return 0
 
-        return 0
+        ids_to_delete = [match.id for match in results.matches]
+
+        # Delete in batches
+        batch_size = 100
+        for i in range(0, len(ids_to_delete), batch_size):
+            batch = ids_to_delete[i:i + batch_size]
+            self.index.delete(ids=batch)
+
+        return len(ids_to_delete)
 
     def count(self, user_id: Optional[str] = None) -> int:
         """
@@ -399,9 +321,19 @@ class VectorStore:
             Number of documents
         """
         if user_id:
-            results = self.collection.get(where={"user_id": user_id}, include=[])
-            return len(results["ids"])
-        return self.collection.count()
+            # Query to count user's documents
+            dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
+            results = self.index.query(
+                vector=dummy_vector,
+                top_k=10000,
+                include_metadata=False,
+                filter={"user_id": {"$eq": user_id}}
+            )
+            return len(results.matches)
+
+        # Get total count from index stats
+        stats = self.index.describe_index_stats()
+        return stats.total_vector_count
 
     def get_chunks_by_source(self, source_name: str, user_id: str) -> List[Dict[str, Any]]:
         """
@@ -414,19 +346,28 @@ class VectorStore:
         Returns:
             List of chunks with text and metadata, sorted by chunk_index
         """
-        results = self.collection.get(
-            where={"$and": [{"user_id": user_id}, {"source": source_name}]},
-            include=["documents", "metadatas"]
+        dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
+        results = self.index.query(
+            vector=dummy_vector,
+            top_k=10000,
+            include_metadata=True,
+            filter={
+                "$and": [
+                    {"user_id": {"$eq": user_id}},
+                    {"source": {"$eq": source_name}}
+                ]
+            }
         )
 
-        if not results["documents"]:
+        if not results.matches:
             return []
 
         chunks = []
-        for i, (doc, metadata) in enumerate(zip(results["documents"], results["metadatas"])):
+        for match in results.matches:
+            metadata = match.metadata
             chunks.append({
-                "id": results["ids"][i],
-                "text": doc,
+                "id": match.id,
+                "text": metadata.get("text", ""),
                 "chunk_index": metadata.get("chunk_index", 0),
                 "total_chunks": metadata.get("total_chunks", 1),
                 "page": metadata.get("page"),
@@ -451,17 +392,17 @@ class VectorStore:
         Returns:
             Dict with the chunk, previous chunks, and next chunks, or None if not found
         """
-        # Get the target chunk
-        result = self.collection.get(
-            ids=[chunk_id],
-            include=["documents", "metadatas"]
-        )
-
-        if not result["documents"]:
+        # Fetch the target chunk
+        try:
+            result = self.index.fetch(ids=[chunk_id])
+        except Exception:
             return None
 
-        chunk_text = result["documents"][0]
-        metadata = result["metadatas"][0]
+        if not result.vectors or chunk_id not in result.vectors:
+            return None
+
+        vector_data = result.vectors[chunk_id]
+        metadata = vector_data.metadata
 
         # Verify user owns this chunk
         if metadata.get("user_id") != user_id:
@@ -470,6 +411,7 @@ class VectorStore:
         source = metadata.get("source")
         chunk_index = metadata.get("chunk_index", 0)
         total_chunks = metadata.get("total_chunks", 1)
+        chunk_text = metadata.get("text", "")
 
         # Get all chunks from the same source to find context
         all_chunks = self.get_chunks_by_source(source, user_id)

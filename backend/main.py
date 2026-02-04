@@ -11,7 +11,7 @@ from backend.ingestion import (
     DOCXProcessor, is_docx_available,
     HTMLProcessor, is_html_available
 )
-from backend.storage import VectorStore, ChatStore
+from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
 from backend.auth import get_current_user
 from backend.config import MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB
@@ -45,19 +45,17 @@ html_processor = None
 chunker = None
 vector_store = None
 query_engine = None
-chat_store = None
 
 
 def get_components():
     global pdf_processor, text_processor, epub_processor, docx_processor, html_processor
-    global chunker, vector_store, query_engine, chat_store
+    global chunker, vector_store, query_engine
     if pdf_processor is None:
         pdf_processor = PDFProcessor()
         text_processor = TextProcessor()
         chunker = Chunker()
         vector_store = VectorStore()
         query_engine = QueryEngine()
-        chat_store = ChatStore()
         # Initialize optional processors if available
         if is_ebooklib_available():
             epub_processor = EPUBProcessor()
@@ -73,8 +71,7 @@ def get_components():
         "html": html_processor,
         "chunker": chunker,
         "vector_store": vector_store,
-        "query_engine": query_engine,
-        "chat_store": chat_store
+        "query_engine": query_engine
     }
 
 
@@ -84,7 +81,6 @@ class QueryRequest(BaseModel):
     top_k: int = 5
     threshold: float = 0.3
     source_filter: Optional[str] = None
-    session_id: Optional[str] = None
 
 
 class TextUploadRequest(BaseModel):
@@ -112,32 +108,6 @@ class UploadResponse(BaseModel):
     chunks_created: int
 
 
-class CreateSessionRequest(BaseModel):
-    title: Optional[str] = None
-
-
-class SessionResponse(BaseModel):
-    id: str
-    user_id: str
-    title: str
-    created_at: str
-    updated_at: str
-
-
-class MessageResponse(BaseModel):
-    id: str
-    role: str
-    content: str
-    sources: Optional[List[dict]] = None
-    chunks_used: Optional[int] = None
-    provider: Optional[str] = None
-    created_at: str
-
-
-class SessionWithMessagesResponse(SessionResponse):
-    messages: List[MessageResponse]
-
-
 # Health check endpoint (responds immediately, no heavy loading, no auth)
 @app.get("/health")
 async def health_check():
@@ -158,10 +128,7 @@ async def root():
             "query": "POST /api/query",
             "sources": "GET /api/sources",
             "delete_source": "DELETE /api/sources/{source_name}",
-            "stats": "GET /api/stats",
-            "chat_sessions": "GET/POST /api/chat/sessions",
-            "chat_session": "GET/DELETE /api/chat/sessions/{id}",
-            "update_session_title": "PATCH /api/chat/sessions/{id}"
+            "stats": "GET /api/stats"
         }
     }
 
@@ -288,27 +255,6 @@ async def query(
         source_filter=request.source_filter
     )
 
-    # Auto-save to chat session if session_id is provided
-    if request.session_id:
-        chat_store = components["chat_store"]
-        # Save user message
-        chat_store.add_message(
-            session_id=request.session_id,
-            user_id=user_id,
-            role="user",
-            content=request.question
-        )
-        # Save assistant response
-        chat_store.add_message(
-            session_id=request.session_id,
-            user_id=user_id,
-            role="assistant",
-            content=result["answer"],
-            sources=result.get("sources"),
-            chunks_used=result.get("chunks_used"),
-            provider=result.get("provider")
-        )
-
     return QueryResponse(**result)
 
 
@@ -398,80 +344,6 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
         "docx_available": is_docx_available(),
         "html_available": is_html_available()
     }
-
-
-# Chat Session Endpoints
-@app.get("/api/chat/sessions", response_model=List[SessionResponse])
-async def get_chat_sessions(current_user: dict = Depends(get_current_user)):
-    """Get all chat sessions for the authenticated user."""
-    user_id = current_user["user_id"]
-    components = get_components()
-    sessions = components["chat_store"].get_sessions(user_id)
-    return [SessionResponse(**s) for s in sessions]
-
-
-@app.post("/api/chat/sessions", response_model=SessionResponse)
-async def create_chat_session(
-    request: CreateSessionRequest,
-    current_user: dict = Depends(get_current_user)
-):
-    """Create a new chat session for the authenticated user."""
-    user_id = current_user["user_id"]
-    components = get_components()
-    session = components["chat_store"].create_session(user_id, request.title)
-    return SessionResponse(**session)
-
-
-@app.get("/api/chat/sessions/{session_id}", response_model=SessionWithMessagesResponse)
-async def get_chat_session(
-    session_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get a chat session with all messages for the authenticated user."""
-    user_id = current_user["user_id"]
-    components = get_components()
-    session = components["chat_store"].get_session(session_id, user_id)
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return SessionWithMessagesResponse(**session)
-
-
-@app.delete("/api/chat/sessions/{session_id}")
-async def delete_chat_session(
-    session_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Delete a chat session for the authenticated user."""
-    user_id = current_user["user_id"]
-    components = get_components()
-    deleted = components["chat_store"].delete_session(session_id, user_id)
-
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return {"message": "Session deleted", "session_id": session_id}
-
-
-@app.patch("/api/chat/sessions/{session_id}")
-async def update_chat_session_title(
-    session_id: str,
-    request: CreateSessionRequest,
-    current_user: dict = Depends(get_current_user)
-):
-    """Update chat session title for the authenticated user."""
-    if not request.title:
-        raise HTTPException(status_code=400, detail="Title is required")
-
-    user_id = current_user["user_id"]
-    components = get_components()
-    updated = components["chat_store"].update_session_title(session_id, user_id, request.title)
-
-    if not updated:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return {"message": "Session updated", "session_id": session_id, "title": request.title}
 
 
 if __name__ == "__main__":

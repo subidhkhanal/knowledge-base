@@ -3,8 +3,8 @@ fastapi>=0.109.0
 uvicorn>=0.27.0
 python-multipart>=0.0.9
 
-# Vector Database (includes lightweight default embeddings)
-chromadb>=0.4.22
+# Vector Database (Pinecone cloud - free tier: 100K vectors)
+pinecone-client>=3.0.0
 
 # Document Processing
 PyPDF2>=3.0.1
@@ -23,12 +23,5 @@ python-dotenv>=1.0.0
 # Utilities
 tiktoken>=0.5.0
 
-# Hybrid Search (BM25 keyword search)
-rank-bm25>=0.2.2
-
-# Re-ranking (Cohere free tier: 1000 req/month)
+# Embeddings and Re-ranking (Cohere free tier)
 cohere>=5.0.0
-
-# Optional: For local audio transcription (heavy, not for free hosting)
-# openai-whisper>=20231117
-# sentence-transformers>=2.3.0
