@@ -153,7 +153,6 @@ async def root():
         "endpoints": {
             "health": "GET /health",
             "upload_document": "POST /api/upload/document (PDF, EPUB, DOCX, HTML, TXT, MD)",
-            "upload_pdf": "POST /api/upload/pdf",
             "upload_text": "POST /api/upload/text",
             "query": "POST /api/query",
             "sources": "GET /api/sources",
@@ -221,38 +220,6 @@ async def upload_document(
 
     return UploadResponse(
         message=f"{ext.upper()[1:]} processed successfully",
-        source=file.filename,
-        chunks_created=len(chunks)
-    )
-
-
-@app.post("/api/upload/pdf", response_model=UploadResponse)
-async def upload_pdf(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
-):
-    """Upload and process a PDF file for the authenticated user."""
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="File must be a PDF")
-
-    user_id = current_user["user_id"]
-    components = get_components()
-    content = await file.read()
-
-    # Extract text from PDF
-    documents = components["pdf"].process_bytes(content, file.filename)
-
-    if not documents:
-        raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
-
-    # Chunk the documents
-    chunks = components["chunker"].chunk_documents(documents)
-
-    # Store in vector database with user_id
-    components["vector_store"].add_documents(chunks, user_id=user_id)
-
-    return UploadResponse(
-        message="PDF processed successfully",
         source=file.filename,
         chunks_created=len(chunks)
     )
@@ -377,6 +344,27 @@ async def delete_source(
         "source": source_name,
         "chunks_deleted": deleted
     }
+
+
+@app.get("/api/chunks/{chunk_id}")
+async def get_chunk_context(
+    chunk_id: str,
+    context_size: int = 1,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific chunk with surrounding context for the authenticated user."""
+    user_id = current_user["user_id"]
+    components = get_components()
+    result = components["vector_store"].get_chunk_with_context(
+        chunk_id=chunk_id,
+        user_id=user_id,
+        context_size=context_size
+    )
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Chunk not found")
+
+    return result
 
 
 @app.get("/api/stats")

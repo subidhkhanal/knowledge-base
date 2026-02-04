@@ -43,7 +43,7 @@ class LLMReasoning:
 
 Question: {query}
 
-Answer with citation [Source: filename, page X]:"""
+Answer the question based on the context above. Do NOT include source citations or references in your answer - sources will be displayed separately."""
 
     def _call_groq(self, prompt: str) -> Optional[str]:
         """Call Groq API (primary - free cloud)."""
@@ -145,22 +145,17 @@ Answer with citation [Source: filename, page X]:"""
                 "provider": None
             }
 
-        # Extract sources from chunks
+        # Extract sources from chunks (include chunk_id and text for context viewing)
         sources = []
-        seen_sources = set()
         for chunk in chunks:
             metadata = chunk.get("metadata", {})
-            source = metadata.get("source", "Unknown")
-            page = metadata.get("page")
-            source_key = f"{source}:{page}"
-
-            if source_key not in seen_sources:
-                seen_sources.add(source_key)
-                sources.append({
-                    "source": source,
-                    "page": page,
-                    "similarity": chunk.get("similarity", 0)
-                })
+            sources.append({
+                "source": metadata.get("source", "Unknown"),
+                "page": metadata.get("page"),
+                "similarity": chunk.get("similarity", 0),
+                "chunk_id": chunk.get("id"),
+                "text": chunk.get("text", "")
+            })
 
         return {
             "answer": response,
@@ -200,22 +195,17 @@ Answer with citation [Source: filename, page X]:"""
                 "provider": None
             }
 
-        # Extract sources from chunks
+        # Extract sources from chunks (include chunk_id and text for context viewing)
         sources = []
-        seen_sources = set()
         for chunk in chunks:
             metadata = chunk.get("metadata", {})
-            source = metadata.get("source", "Unknown")
-            page = metadata.get("page")
-            source_key = f"{source}:{page}"
-
-            if source_key not in seen_sources:
-                seen_sources.add(source_key)
-                sources.append({
-                    "source": source,
-                    "page": page,
-                    "similarity": chunk.get("similarity", 0)
-                })
+            sources.append({
+                "source": metadata.get("source", "Unknown"),
+                "page": metadata.get("page"),
+                "similarity": chunk.get("similarity", 0),
+                "chunk_id": chunk.get("id"),
+                "text": chunk.get("text", "")
+            })
 
         return {
             "answer": response,

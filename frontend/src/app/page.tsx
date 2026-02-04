@@ -10,6 +10,20 @@ interface Source {
   source: string;
   page: number | null;
   similarity: number;
+  chunk_id?: string;
+  text?: string;
+}
+
+interface ChunkContext {
+  id: string;
+  text: string;
+  source: string;
+  source_type: string;
+  page: number | null;
+  chunk_index: number;
+  total_chunks: number;
+  prev_chunks: Array<{ text: string; chunk_index: number; page?: number }>;
+  next_chunks: Array<{ text: string; chunk_index: number; page?: number }>;
 }
 
 interface Message {
@@ -47,6 +61,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
+  const [selectedSource, setSelectedSource] = useState<Source | null>(null);
+  const [chunkContext, setChunkContext] = useState<ChunkContext | null>(null);
+  const [isLoadingContext, setIsLoadingContext] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
@@ -235,6 +252,30 @@ export default function Home() {
     createConversation();
   };
 
+  const handleSourceClick = async (source: Source) => {
+    setSelectedSource(source);
+
+    if (source.chunk_id) {
+      setIsLoadingContext(true);
+      try {
+        const response = await authFetch(`/api/chunks/${source.chunk_id}?context_size=2`);
+        if (response.ok) {
+          const data = await response.json();
+          setChunkContext(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch chunk context:", error);
+      } finally {
+        setIsLoadingContext(false);
+      }
+    }
+  };
+
+  const closeSourceModal = () => {
+    setSelectedSource(null);
+    setChunkContext(null);
+  };
+
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -302,6 +343,154 @@ export default function Home() {
           </div>
         ))}
       </div>
+
+      {/* Source Context Modal */}
+      {selectedSource && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0, 0, 0, 0.7)' }}
+          onClick={closeSourceModal}
+        >
+          <div
+            className="relative max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-2xl"
+            style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              className="sticky top-0 flex items-center justify-between px-6 py-4"
+              style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{ background: 'var(--accent-subtle)' }}
+                >
+                  <svg className="h-5 w-5" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {selectedSource.source}
+                  </h3>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    {selectedSource.page ? `Page ${selectedSource.page}` : 'Source Document'}
+                    {chunkContext && ` • Chunk ${chunkContext.chunk_index + 1} of ${chunkContext.total_chunks}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeSourceModal}
+                className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer"
+                style={{ color: 'var(--text-tertiary)' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(80vh - 80px)' }}>
+              {isLoadingContext ? (
+                <div className="flex items-center justify-center py-12">
+                  <svg className="h-8 w-8 animate-spin" style={{ color: 'var(--accent)' }} viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              ) : chunkContext ? (
+                <div className="space-y-4">
+                  {/* Previous Context */}
+                  {chunkContext.prev_chunks.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                        Previous Context
+                      </p>
+                      {chunkContext.prev_chunks.map((chunk, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg px-4 py-3 text-sm leading-relaxed"
+                          style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}
+                        >
+                          {chunk.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Main Chunk (Highlighted) */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                      Matched Content
+                    </p>
+                    <div
+                      className="rounded-lg px-4 py-3 text-sm leading-relaxed"
+                      style={{
+                        background: 'var(--accent-subtle)',
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--accent)',
+                        borderLeftWidth: '4px'
+                      }}
+                    >
+                      {chunkContext.text}
+                    </div>
+                  </div>
+
+                  {/* Next Context */}
+                  {chunkContext.next_chunks.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-tertiary)' }}>
+                        Following Context
+                      </p>
+                      {chunkContext.next_chunks.map((chunk, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg px-4 py-3 text-sm leading-relaxed"
+                          style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}
+                        >
+                          {chunk.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : selectedSource.text ? (
+                /* Fallback: Show the chunk text directly if context fetch failed */
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+                    Source Content
+                  </p>
+                  <div
+                    className="rounded-lg px-4 py-3 text-sm leading-relaxed"
+                    style={{
+                      background: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)'
+                    }}
+                  >
+                    {selectedSource.text}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <svg className="h-12 w-12 mx-auto mb-3" style={{ color: 'var(--text-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    Source context not available
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    Try asking a new question to see source content
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header - Glassmorphism Navbar */}
       <header
@@ -607,17 +796,21 @@ export default function Home() {
                               </p>
                               <div className="flex flex-wrap gap-2">
                                 {message.sources.map((source, idx) => (
-                                  <span
+                                  <button
                                     key={idx}
-                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs"
+                                    onClick={() => handleSourceClick(source)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs transition-all cursor-pointer hover:scale-[1.02]"
                                     style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                                    title="Click to view source context"
                                   >
                                     <svg className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                     <span className="font-medium">{source.source}</span>
                                     {source.page && <span style={{ color: 'var(--text-tertiary)' }}>p.{source.page}</span>}
-                                  </span>
+                                  </button>
                                 ))}
                               </div>
                             </div>

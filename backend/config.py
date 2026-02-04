@@ -27,6 +27,7 @@ SIMILARITY_THRESHOLD = 0.3  # Minimum similarity score
 USE_HYBRID_SEARCH = os.getenv("USE_HYBRID_SEARCH", "true").lower() == "true"
 SEMANTIC_WEIGHT = float(os.getenv("SEMANTIC_WEIGHT", "0.5"))  # Weight for semantic search (0-1)
 BM25_WEIGHT = float(os.getenv("BM25_WEIGHT", "0.5"))  # Weight for BM25 keyword search (0-1)
+HYBRID_MIN_THRESHOLD = float(os.getenv("HYBRID_MIN_THRESHOLD", "0.35"))  # Min semantic similarity for hybrid results
 
 # Re-ranking settings (Cohere free tier: 1000 req/month)
 # Get your free API key at https://dashboard.cohere.com/api-keys

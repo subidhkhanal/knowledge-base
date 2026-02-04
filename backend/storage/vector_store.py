@@ -3,7 +3,7 @@ import uuid
 import re
 import chromadb
 from rank_bm25 import BM25Okapi
-from backend.config import CHROMADB_DIR, TOP_K, SIMILARITY_THRESHOLD, SEMANTIC_WEIGHT, BM25_WEIGHT
+from backend.config import CHROMADB_DIR, TOP_K, SIMILARITY_THRESHOLD, SEMANTIC_WEIGHT, BM25_WEIGHT, HYBRID_MIN_THRESHOLD
 
 
 class VectorStore:
@@ -324,6 +324,12 @@ class VectorStore:
             reverse=True
         )
 
+        # Filter out results with low semantic similarity to avoid irrelevant sources
+        sorted_docs = [
+            doc for doc in sorted_docs
+            if doc["semantic_similarity"] >= HYBRID_MIN_THRESHOLD
+        ]
+
         # Format output with combined similarity score
         results = []
         for doc in sorted_docs[:top_k]:
@@ -417,8 +423,9 @@ class VectorStore:
             return []
 
         chunks = []
-        for doc, metadata in zip(results["documents"], results["metadatas"]):
+        for i, (doc, metadata) in enumerate(zip(results["documents"], results["metadatas"])):
             chunks.append({
+                "id": results["ids"][i],
                 "text": doc,
                 "chunk_index": metadata.get("chunk_index", 0),
                 "total_chunks": metadata.get("total_chunks", 1),
@@ -431,3 +438,65 @@ class VectorStore:
         chunks.sort(key=lambda x: x["chunk_index"])
 
         return chunks
+
+    def get_chunk_with_context(self, chunk_id: str, user_id: str, context_size: int = 1) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific chunk by ID with surrounding context chunks.
+
+        Args:
+            chunk_id: The chunk's unique identifier
+            user_id: The user's unique identifier
+            context_size: Number of chunks to include before and after
+
+        Returns:
+            Dict with the chunk, previous chunks, and next chunks, or None if not found
+        """
+        # Get the target chunk
+        result = self.collection.get(
+            ids=[chunk_id],
+            include=["documents", "metadatas"]
+        )
+
+        if not result["documents"]:
+            return None
+
+        chunk_text = result["documents"][0]
+        metadata = result["metadatas"][0]
+
+        # Verify user owns this chunk
+        if metadata.get("user_id") != user_id:
+            return None
+
+        source = metadata.get("source")
+        chunk_index = metadata.get("chunk_index", 0)
+        total_chunks = metadata.get("total_chunks", 1)
+
+        # Get all chunks from the same source to find context
+        all_chunks = self.get_chunks_by_source(source, user_id)
+
+        # Find previous and next chunks
+        prev_chunks = []
+        next_chunks = []
+
+        for chunk in all_chunks:
+            idx = chunk["chunk_index"]
+            if chunk_index - context_size <= idx < chunk_index:
+                prev_chunks.append(chunk)
+            elif chunk_index < idx <= chunk_index + context_size:
+                next_chunks.append(chunk)
+
+        # Sort context chunks
+        prev_chunks.sort(key=lambda x: x["chunk_index"])
+        next_chunks.sort(key=lambda x: x["chunk_index"])
+
+        return {
+            "id": chunk_id,
+            "text": chunk_text,
+            "source": source,
+            "source_type": metadata.get("source_type", "unknown"),
+            "page": metadata.get("page"),
+            "chunk_index": chunk_index,
+            "total_chunks": total_chunks,
+            "prev_chunks": prev_chunks,
+            "next_chunks": next_chunks
+        }
