@@ -4,7 +4,7 @@ uvicorn>=0.27.0
 python-multipart>=0.0.9
 
 # Vector Database (Pinecone cloud - free tier: 100K vectors)
-pinecone-client>=3.0.0
+pinecone>=5.0.0
 
 # Document Processing
 PyPDF2>=3.0.1
