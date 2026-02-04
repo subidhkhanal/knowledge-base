@@ -6,6 +6,19 @@ from datetime import datetime
 class TextProcessor:
     """Process text and markdown files."""
 
+    # Encodings to try in order of preference
+    ENCODINGS = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252']
+
+    def _decode_bytes(self, content: bytes) -> str:
+        """Decode bytes trying multiple encodings."""
+        for encoding in self.ENCODINGS:
+            try:
+                return content.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        # Last resort: decode with replacement characters
+        return content.decode('utf-8', errors='replace')
+
     def process(self, file_path: str | Path) -> List[Dict[str, Any]]:
         """
         Read text from a file.
@@ -20,8 +33,9 @@ class TextProcessor:
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            text = f.read()
+        with open(file_path, "rb") as f:
+            content = f.read()
+        text = self._decode_bytes(content)
 
         return [{
             "text": text.strip(),
@@ -62,7 +76,7 @@ class TextProcessor:
         Returns:
             List of dicts with 'text' and metadata
         """
-        text = content.decode("utf-8")
+        text = self._decode_bytes(content)
 
         return [{
             "text": text.strip(),
