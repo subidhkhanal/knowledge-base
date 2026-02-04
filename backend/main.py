@@ -50,12 +50,12 @@ query_engine = None
 def get_components():
     global pdf_processor, text_processor, epub_processor, docx_processor, html_processor
     global chunker, vector_store, query_engine
+
+    # Initialize basic processors first (these don't require external APIs)
     if pdf_processor is None:
         pdf_processor = PDFProcessor()
         text_processor = TextProcessor()
         chunker = Chunker()
-        vector_store = VectorStore()
-        query_engine = QueryEngine()
         # Initialize optional processors if available
         if is_ebooklib_available():
             epub_processor = EPUBProcessor()
@@ -63,6 +63,21 @@ def get_components():
             docx_processor = DOCXProcessor()
         if is_html_available():
             html_processor = HTMLProcessor()
+
+    # Initialize vector store and query engine (require API keys)
+    # Check separately so a failed init can be retried
+    if vector_store is None:
+        try:
+            vector_store = VectorStore()
+        except ValueError as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Vector store initialization failed: {str(e)}"
+            )
+
+    if query_engine is None:
+        query_engine = QueryEngine()
+
     return {
         "pdf": pdf_processor,
         "text": text_processor,
