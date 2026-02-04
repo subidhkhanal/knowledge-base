@@ -15,6 +15,10 @@ CHAT_DB_PATH = DATA_DIR / "chat_history.db"
 # Ensure directories exist
 CHROMADB_DIR.mkdir(parents=True, exist_ok=True)
 
+# Upload settings
+MAX_UPLOAD_SIZE_MB = 10
+MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # 10 MB in bytes
+
 # Chunking settings
 CHUNK_SIZE = 800  # tokens
 CHUNK_OVERLAP = 150  # tokens

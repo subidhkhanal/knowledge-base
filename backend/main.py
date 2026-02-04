@@ -14,6 +14,7 @@ from backend.ingestion import (
 from backend.storage import VectorStore, ChatStore
 from backend.retrieval import QueryEngine
 from backend.auth import get_current_user
+from backend.config import MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -199,6 +200,13 @@ async def upload_document(
     components = get_components()
     content = await file.read()
 
+    # Check file size
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB} MB."
+        )
+
     processor = components.get(processor_type)
     if processor is None:
         raise HTTPException(
@@ -233,6 +241,13 @@ async def upload_text(
     """Upload direct text content for the authenticated user."""
     if not request.content.strip():
         raise HTTPException(status_code=400, detail="Content cannot be empty")
+
+    # Check content size
+    if len(request.content.encode('utf-8')) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Content too large. Maximum size is {MAX_UPLOAD_SIZE_MB} MB."
+        )
 
     user_id = current_user["user_id"]
     components = get_components()
