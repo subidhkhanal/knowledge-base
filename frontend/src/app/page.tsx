@@ -164,10 +164,6 @@ export default function Home() {
             message: "Upload complete",
             subMessage: `${data.chunks_created || data.chunk_count || 0} chunks created`,
           });
-          // Refresh sources list to include the new document
-          authFetch("/api/sources").then(res => res.ok && res.json()).then(data => {
-            if (data) setAvailableSources(data);
-          }).catch(() => {});
         } else {
           removeToast(toastId);
           addToast({
