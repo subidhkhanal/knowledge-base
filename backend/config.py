@@ -59,6 +59,10 @@ LLM_MAX_TOKENS = 2048  # Max response tokens
 LLM_TEMPERATURE = 0.3  # Lower = more focused, higher = more creative
 LLM_TIMEOUT = 60.0  # Timeout in seconds for LLM API calls
 
+# Query Router settings
+ENABLE_QUERY_ROUTING = os.getenv("ENABLE_QUERY_ROUTING", "true").lower() == "true"
+ROUTER_TEMPERATURE = 0.1  # Low temperature for consistent classification
+
 # Prompt template
 SYSTEM_PROMPT = """You are an assistant that answers ONLY from the provided context.
 If the answer is not in the context, say "I don't have this information in my knowledge base."

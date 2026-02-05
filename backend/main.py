@@ -14,7 +14,8 @@ from backend.ingestion import (
 from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
 from backend.auth import get_current_user
-from backend.config import MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB
+from backend.config import MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING
+from backend.routing import QueryRouter, RouteHandlers
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -45,11 +46,13 @@ html_processor = None
 chunker = None
 vector_store = None
 query_engine = None
+query_router = None
+route_handlers = None
 
 
 def get_components():
     global pdf_processor, text_processor, epub_processor, docx_processor, html_processor
-    global chunker, vector_store, query_engine
+    global chunker, vector_store, query_engine, query_router, route_handlers
 
     # Initialize basic processors first (these don't require external APIs)
     if pdf_processor is None:
@@ -78,6 +81,14 @@ def get_components():
     if query_engine is None:
         query_engine = QueryEngine()
 
+    # Initialize query router and handlers (if routing is enabled)
+    if query_router is None and ENABLE_QUERY_ROUTING:
+        query_router = QueryRouter()
+        route_handlers = RouteHandlers(
+            vector_store=vector_store,
+            query_engine=query_engine
+        )
+
     return {
         "pdf": pdf_processor,
         "text": text_processor,
@@ -86,7 +97,9 @@ def get_components():
         "html": html_processor,
         "chunker": chunker,
         "vector_store": vector_store,
-        "query_engine": query_engine
+        "query_engine": query_engine,
+        "query_router": query_router,
+        "route_handlers": route_handlers
     }
 
 
@@ -109,6 +122,7 @@ class QueryResponse(BaseModel):
     sources: List[dict]
     chunks_used: int
     provider: Optional[str]
+    route_type: Optional[str] = None
 
 
 class SourceResponse(BaseModel):
@@ -319,13 +333,29 @@ async def query(
     user_id = current_user["user_id"]
     components = get_components()
 
-    result = await components["query_engine"].query(
-        question=request.question,
-        user_id=user_id,
-        top_k=request.top_k,
-        threshold=request.threshold,
-        source_filter=request.source_filter
-    )
+    # Use query routing if enabled
+    if ENABLE_QUERY_ROUTING and components["query_router"] is not None:
+        # Classify the query
+        route_result = await components["query_router"].classify(request.question)
+
+        # Route to appropriate handler
+        result = await components["route_handlers"].handle(
+            route_type=route_result.route_type,
+            query=request.question,
+            user_id=user_id,
+            top_k=request.top_k,
+            threshold=request.threshold,
+            source_filter=request.source_filter
+        )
+    else:
+        # Fallback to direct query engine (routing disabled)
+        result = await components["query_engine"].query(
+            question=request.question,
+            user_id=user_id,
+            top_k=request.top_k,
+            threshold=request.threshold,
+            source_filter=request.source_filter
+        )
 
     return QueryResponse(**result)
 

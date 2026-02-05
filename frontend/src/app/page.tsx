@@ -64,8 +64,6 @@ export default function Home() {
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
   const [chunkContext, setChunkContext] = useState<ChunkContext | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(false);
-  const [availableSources, setAvailableSources] = useState<Array<{source: string; source_type: string; chunk_count: number}>>([]);
-  const [sourceFilter, setSourceFilter] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
@@ -78,22 +76,6 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // Fetch available sources for filtering
-  useEffect(() => {
-    const fetchSources = async () => {
-      try {
-        const response = await authFetch("/api/sources");
-        if (response.ok) {
-          const data = await response.json();
-          setAvailableSources(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch sources:", error);
-      }
-    };
-    fetchSources();
-  }, [authFetch]);
 
   // Toast auto-remove
   useEffect(() => {
@@ -237,8 +219,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question: input.trim(),
-          source_filter: sourceFilter || null
+          question: input.trim()
         }),
       });
 
@@ -867,41 +848,6 @@ export default function Home() {
           {/* Input Area */}
           <footer className="px-6 pb-6">
             <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-              {/* Source Filter Dropdown */}
-              {availableSources.length > 0 && (
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Search in:</span>
-                  <select
-                    value={sourceFilter}
-                    onChange={(e) => setSourceFilter(e.target.value)}
-                    className="text-xs rounded-lg px-3 py-1.5 outline-none cursor-pointer"
-                    style={{
-                      background: 'var(--bg-secondary)',
-                      color: 'var(--text-secondary)',
-                      border: '1px solid var(--border)'
-                    }}
-                  >
-                    <option value="">All documents</option>
-                    {availableSources.map((src) => (
-                      <option key={src.source} value={src.source}>
-                        {src.source} ({src.chunk_count} chunks)
-                      </option>
-                    ))}
-                  </select>
-                  {sourceFilter && (
-                    <button
-                      type="button"
-                      onClick={() => setSourceFilter("")}
-                      className="text-xs px-2 py-1 rounded-lg cursor-pointer transition-colors"
-                      style={{ color: 'var(--text-tertiary)' }}
-                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-tertiary)'}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              )}
               <div
                 className="flex items-end gap-3 rounded-xl px-4 py-4 cursor-text"
                 style={{ background: 'var(--bg-secondary)', minHeight: '56px' }}
