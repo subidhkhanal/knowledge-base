@@ -4,7 +4,7 @@ import cohere
 from pinecone import Pinecone, ServerlessSpec
 from backend.config import (
     TOP_K, SIMILARITY_THRESHOLD, PINECONE_API_KEY, PINECONE_INDEX_NAME,
-    COHERE_API_KEY, COHERE_EMBED_MODEL, COHERE_EMBED_DIMENSION
+    COHERE_API_KEY, COHERE_EMBED_MODEL, COHERE_EMBED_DIMENSION, API_TIMEOUT
 )
 
 # API batch size limits
@@ -35,8 +35,8 @@ class VectorStore:
         # Initialize Pinecone
         self.pc = Pinecone(api_key=PINECONE_API_KEY)
 
-        # Initialize Cohere for embeddings
-        self.cohere_client = cohere.Client(COHERE_API_KEY)
+        # Initialize Cohere for embeddings with timeout
+        self.cohere_client = cohere.Client(COHERE_API_KEY, timeout=API_TIMEOUT)
         self.embed_model = COHERE_EMBED_MODEL
 
         # Create index if it doesn't exist
@@ -53,15 +53,6 @@ class VectorStore:
 
         # Connect to index
         self.index = self.pc.Index(PINECONE_INDEX_NAME)
-
-    def _get_embedding(self, text: str) -> List[float]:
-        """Get embedding for a single text using Cohere."""
-        response = self.cohere_client.embed(
-            texts=[text],
-            model=self.embed_model,
-            input_type="search_document"
-        )
-        return response.embeddings[0]
 
     def _get_query_embedding(self, text: str) -> List[float]:
         """Get embedding for a query using Cohere."""
@@ -241,7 +232,8 @@ class VectorStore:
                 sources[source]["chunk_count"] += 1
 
         except Exception as e:
-            print(f"Error getting sources: {e}")
+            # Return empty list on error - caller can handle appropriately
+            return []
 
         return list(sources.values())
 

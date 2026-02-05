@@ -46,10 +46,39 @@ Question: {query}
 
 Answer the question based on the context above. Do NOT include source citations or references in your answer - sources will be displayed separately."""
 
+    def _extract_sources(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Extract source information from chunks."""
+        sources = []
+        for chunk in chunks:
+            metadata = chunk.get("metadata", {})
+            sources.append({
+                "source": metadata.get("source", "Unknown"),
+                "page": metadata.get("page"),
+                "similarity": chunk.get("similarity", 0),
+                "chunk_id": chunk.get("id"),
+                "text": chunk.get("text", "")
+            })
+        return sources
+
+    def _empty_response(self) -> Dict[str, Any]:
+        """Return response when no chunks are available."""
+        return {
+            "answer": "I don't have any relevant information in my knowledge base to answer this question.",
+            "sources": [],
+            "provider": None
+        }
+
+    def _error_response(self) -> Dict[str, Any]:
+        """Return response when LLM call fails."""
+        return {
+            "answer": "I'm unable to generate a response. Please check your API keys.",
+            "sources": [],
+            "provider": None
+        }
+
     def _call_groq(self, prompt: str) -> Optional[str]:
         """Call Groq API (primary - free cloud)."""
         if not self.groq_client:
-            print("Groq API key not configured")
             return None
 
         try:
@@ -63,8 +92,7 @@ Answer the question based on the context above. Do NOT include source citations 
                 max_tokens=LLM_MAX_TOKENS
             )
             return response.choices[0].message.content
-        except Exception as e:
-            print(f"Groq error: {e}")
+        except Exception:
             return None
 
     async def _call_ollama(self, prompt: str) -> Optional[str]:
@@ -82,8 +110,7 @@ Answer the question based on the context above. Do NOT include source citations 
                 )
                 response.raise_for_status()
                 return response.json().get("response", "")
-        except Exception as e:
-            print(f"Ollama error: {e}")
+        except Exception:
             return None
 
     def _call_ollama_sync(self, prompt: str) -> Optional[str]:
@@ -101,8 +128,7 @@ Answer the question based on the context above. Do NOT include source citations 
                 )
                 response.raise_for_status()
                 return response.json().get("response", "")
-        except Exception as e:
-            print(f"Ollama error: {e}")
+        except Exception:
             return None
 
     async def generate_response(
@@ -121,11 +147,7 @@ Answer the question based on the context above. Do NOT include source citations 
             Dict with 'answer', 'sources', and 'provider'
         """
         if not chunks:
-            return {
-                "answer": "I don't have any relevant information in my knowledge base to answer this question.",
-                "sources": [],
-                "provider": None
-            }
+            return self._empty_response()
 
         context = self._format_context(chunks)
         prompt = self._build_prompt(query, context)
@@ -140,27 +162,11 @@ Answer the question based on the context above. Do NOT include source citations 
             provider = "ollama"
 
         if response is None:
-            return {
-                "answer": "I'm unable to generate a response. Please check your GROQ_API_KEY in .env file.",
-                "sources": [],
-                "provider": None
-            }
-
-        # Extract sources from chunks (include chunk_id and text for context viewing)
-        sources = []
-        for chunk in chunks:
-            metadata = chunk.get("metadata", {})
-            sources.append({
-                "source": metadata.get("source", "Unknown"),
-                "page": metadata.get("page"),
-                "similarity": chunk.get("similarity", 0),
-                "chunk_id": chunk.get("id"),
-                "text": chunk.get("text", "")
-            })
+            return self._error_response()
 
         return {
             "answer": response,
-            "sources": sources,
+            "sources": self._extract_sources(chunks),
             "provider": provider
         }
 
@@ -171,11 +177,7 @@ Answer the question based on the context above. Do NOT include source citations 
     ) -> Dict[str, Any]:
         """Synchronous version of generate_response."""
         if not chunks:
-            return {
-                "answer": "I don't have any relevant information in my knowledge base to answer this question.",
-                "sources": [],
-                "provider": None
-            }
+            return self._empty_response()
 
         context = self._format_context(chunks)
         prompt = self._build_prompt(query, context)
@@ -190,26 +192,10 @@ Answer the question based on the context above. Do NOT include source citations 
             provider = "ollama"
 
         if response is None:
-            return {
-                "answer": "I'm unable to generate a response. Please check your GROQ_API_KEY in .env file.",
-                "sources": [],
-                "provider": None
-            }
-
-        # Extract sources from chunks (include chunk_id and text for context viewing)
-        sources = []
-        for chunk in chunks:
-            metadata = chunk.get("metadata", {})
-            sources.append({
-                "source": metadata.get("source", "Unknown"),
-                "page": metadata.get("page"),
-                "similarity": chunk.get("similarity", 0),
-                "chunk_id": chunk.get("id"),
-                "text": chunk.get("text", "")
-            })
+            return self._error_response()
 
         return {
             "answer": response,
-            "sources": sources,
+            "sources": self._extract_sources(chunks),
             "provider": provider
         }

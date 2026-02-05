@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 import cohere
-from backend.config import COHERE_API_KEY, RERANK_MODEL, RERANK_TOP_K
+from backend.config import COHERE_API_KEY, RERANK_MODEL, RERANK_TOP_K, API_TIMEOUT
 
 
 class Reranker:
@@ -12,10 +12,11 @@ class Reranker:
 
         if COHERE_API_KEY:
             try:
-                self.client = cohere.Client(COHERE_API_KEY)
+                self.client = cohere.Client(COHERE_API_KEY, timeout=API_TIMEOUT)
                 self.available = True
-            except Exception as e:
-                print(f"Failed to initialize Cohere client: {e}")
+            except Exception:
+                # Silently fail - reranking is optional, search will still work
+                pass
 
     def rerank(
         self,
@@ -59,9 +60,8 @@ class Reranker:
 
             return reranked_docs
 
-        except Exception as e:
-            print(f"Reranking failed: {e}")
-            # Fall back to original order
+        except Exception:
+            # Fall back to original order - reranking is optional
             return documents[:top_k]
 
     def is_available(self) -> bool:

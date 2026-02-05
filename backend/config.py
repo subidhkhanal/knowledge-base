@@ -36,6 +36,9 @@ COHERE_API_KEY = os.getenv("COHERE_API_KEY", "")
 COHERE_EMBED_MODEL = os.getenv("COHERE_EMBED_MODEL", "embed-english-v3.0")
 COHERE_EMBED_DIMENSION = 1024  # embed-english-v3.0 dimension
 
+# API timeout settings (in seconds)
+API_TIMEOUT = float(os.getenv("API_TIMEOUT", "30.0"))  # Default timeout for external APIs
+
 # Re-ranking settings
 USE_RERANKING = os.getenv("USE_RERANKING", "true").lower() == "true"
 RERANK_MODEL = os.getenv("RERANK_MODEL", "rerank-english-v3.0")

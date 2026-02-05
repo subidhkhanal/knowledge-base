@@ -217,23 +217,29 @@ async def upload_document(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process text into chunks: {str(e)}"
+            detail=f"Text processing failed: {str(e)}. Try a different file or check for special characters."
         )
 
     if not chunks:
         raise HTTPException(
             status_code=400,
-            detail=f"No content to store. The extracted text from '{file.filename}' was too short."
+            detail=f"Text from '{file.filename}' is too short (minimum ~100 words needed for meaningful search)."
         )
 
     # Store in vector database with user_id
     try:
         components["vector_store"].add_documents(chunks, user_id=user_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to store document: {str(e)}. Please try again later."
-        )
+        error_msg = str(e).lower()
+        if "api" in error_msg or "key" in error_msg or "unauthorized" in error_msg:
+            detail = "Vector database authentication failed. Check your PINECONE_API_KEY and COHERE_API_KEY."
+        elif "timeout" in error_msg or "connection" in error_msg:
+            detail = "Could not connect to vector database. Check your internet connection and try again."
+        elif "quota" in error_msg or "limit" in error_msg or "rate" in error_msg:
+            detail = "API rate limit reached. Wait a moment and try uploading a smaller file."
+        else:
+            detail = f"Failed to store document: {str(e)}"
+        raise HTTPException(status_code=503, detail=detail)
 
     return UploadResponse(
         message=f"{ext.upper()[1:]} processed successfully",
@@ -270,23 +276,29 @@ async def upload_text(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process text into chunks: {str(e)}"
+            detail=f"Text processing failed: {str(e)}. Check for invalid characters in your content."
         )
 
     if not chunks:
         raise HTTPException(
             status_code=400,
-            detail="Text is too short to store. Please provide more content."
+            detail="Text is too short (minimum ~100 words needed for meaningful search)."
         )
 
     # Store in vector database with user_id
     try:
         components["vector_store"].add_documents(chunks, user_id=user_id)
     except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to store text: {str(e)}. Please try again later."
-        )
+        error_msg = str(e).lower()
+        if "api" in error_msg or "key" in error_msg or "unauthorized" in error_msg:
+            detail = "Vector database authentication failed. Check your PINECONE_API_KEY and COHERE_API_KEY."
+        elif "timeout" in error_msg or "connection" in error_msg:
+            detail = "Could not connect to vector database. Check your internet connection and try again."
+        elif "quota" in error_msg or "limit" in error_msg or "rate" in error_msg:
+            detail = "API rate limit reached. Wait a moment and try again with less content."
+        else:
+            detail = f"Failed to store text: {str(e)}"
+        raise HTTPException(status_code=503, detail=detail)
 
     return UploadResponse(
         message="Text processed successfully",
