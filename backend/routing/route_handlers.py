@@ -186,6 +186,149 @@ If the user seems to want help, mention that you can answer questions about thei
             "route_type": RouteType.OUT_OF_SCOPE.value
         }
 
+    async def handle_summary(
+        self,
+        query: str,
+        user_id: str,
+        top_k: int = 10,
+        threshold: float = 0.25,
+        source_filter: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Handle SUMMARY queries - summarize documents or topics.
+
+        Uses RAG with a summary-focused prompt.
+        """
+        if not self.query_engine:
+            return self._error_response("Query engine not available")
+
+        # Get more chunks for comprehensive summary
+        result = await self.query_engine.query(
+            question=query,
+            user_id=user_id,
+            top_k=top_k,
+            threshold=threshold,
+            source_filter=source_filter
+        )
+
+        # If we got chunks, enhance the response with summary-specific prompt
+        if result.get("chunks_used", 0) > 0 and self.groq_client:
+            system_prompt = """You are a summarization assistant. Based on the provided context,
+create a clear and concise summary. Structure your response with:
+- A brief overview (1-2 sentences)
+- Key points as bullet points
+- Any important conclusions or takeaways
+
+Be comprehensive but concise. Focus on the most important information."""
+
+            chunks_text = "\n\n".join([
+                f"[From: {src.get('source', 'Unknown')}]\n{src.get('text', '')}"
+                for src in result.get("sources", [])
+            ])
+
+            enhanced_response = self._call_llm(
+                system_prompt,
+                f"Please summarize the following content:\n\n{chunks_text}\n\nOriginal request: {query}"
+            )
+
+            if enhanced_response:
+                result["answer"] = enhanced_response
+
+        result["route_type"] = RouteType.SUMMARY.value
+        return result
+
+    async def handle_comparison(
+        self,
+        query: str,
+        user_id: str,
+        top_k: int = 10,
+        threshold: float = 0.25,
+        source_filter: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Handle COMPARISON queries - compare two or more things.
+
+        Uses RAG with a comparison-focused prompt.
+        """
+        if not self.query_engine:
+            return self._error_response("Query engine not available")
+
+        # Get more chunks to find information about both items being compared
+        result = await self.query_engine.query(
+            question=query,
+            user_id=user_id,
+            top_k=top_k,
+            threshold=threshold,
+            source_filter=source_filter
+        )
+
+        # If we got chunks, enhance with comparison-specific prompt
+        if result.get("chunks_used", 0) > 0 and self.groq_client:
+            system_prompt = """You are a comparison assistant. Based on the provided context,
+create a clear comparison. Structure your response with:
+- Brief introduction of items being compared
+- Similarities (if any)
+- Key differences (as a structured list or table format)
+- Summary/conclusion
+
+If information about one or more items is missing from the context, note what's available
+and what couldn't be found."""
+
+            chunks_text = "\n\n".join([
+                f"[From: {src.get('source', 'Unknown')}]\n{src.get('text', '')}"
+                for src in result.get("sources", [])
+            ])
+
+            enhanced_response = self._call_llm(
+                system_prompt,
+                f"Please compare based on the following content:\n\n{chunks_text}\n\nComparison request: {query}"
+            )
+
+            if enhanced_response:
+                result["answer"] = enhanced_response
+
+        result["route_type"] = RouteType.COMPARISON.value
+        return result
+
+    async def handle_follow_up(
+        self,
+        query: str,
+        user_id: str,
+        top_k: int = 5,
+        threshold: float = 0.3,
+        source_filter: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Handle FOLLOW_UP queries - questions that reference previous context.
+
+        Note: Currently routes to KNOWLEDGE as we don't have conversation history.
+        The frontend should provide context for true follow-up handling.
+        """
+        if not self.query_engine:
+            return self._error_response("Query engine not available")
+
+        # For now, treat as knowledge query
+        # TODO: Accept conversation history parameter for better context
+        result = await self.query_engine.query(
+            question=query,
+            user_id=user_id,
+            top_k=top_k,
+            threshold=threshold,
+            source_filter=source_filter
+        )
+
+        # If no results, provide helpful message
+        if result.get("chunks_used", 0) == 0:
+            result["answer"] = (
+                "I don't have context from our previous conversation. "
+                "Could you please rephrase your question with more details? "
+                "For example, instead of 'tell me more about that', "
+                "try 'tell me more about [specific topic]'."
+            )
+
+        result["route_type"] = RouteType.FOLLOW_UP.value
+        return result
+
     def _error_response(self, message: str) -> Dict[str, Any]:
         """Return an error response."""
         return {
@@ -232,6 +375,18 @@ If the user seems to want help, mention that you can answer questions about thei
             return await self.handle_clarification(query)
         elif route_type == RouteType.OUT_OF_SCOPE:
             return await self.handle_out_of_scope(query)
+        elif route_type == RouteType.SUMMARY:
+            return await self.handle_summary(
+                query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
+            )
+        elif route_type == RouteType.COMPARISON:
+            return await self.handle_comparison(
+                query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
+            )
+        elif route_type == RouteType.FOLLOW_UP:
+            return await self.handle_follow_up(
+                query, user_id, top_k, threshold, source_filter
+            )
         else:
             # Default to KNOWLEDGE if unknown route type
             return await self.handle_knowledge(

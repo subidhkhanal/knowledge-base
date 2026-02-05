@@ -131,7 +131,7 @@ export default function Home() {
           // Switch to processing message when upload completes
           updateToast(toastId, {
             message: `Processing ${file.name}`,
-            subMessage: "Extracting text & creating chunks..."
+            subMessage: "Indexing document..."
           });
 
           // Animate dots to show activity
@@ -139,7 +139,7 @@ export default function Home() {
           processingIntervalRef.current = setInterval(() => {
             dots = (dots + 1) % 4;
             updateToast(toastId, {
-              subMessage: `Extracting text & creating chunks${'.'.repeat(dots)}`
+              subMessage: `Indexing document${'.'.repeat(dots)}`
             });
           }, 500);
         } else {
@@ -162,7 +162,7 @@ export default function Home() {
           addToast({
             type: "success",
             message: "Upload complete",
-            subMessage: `${data.chunks_created || data.chunk_count || 0} chunks created`,
+            subMessage: "Document added to knowledge base",
           });
         } else {
           removeToast(toastId);
@@ -260,7 +260,7 @@ export default function Home() {
     if (source.chunk_id) {
       setIsLoadingContext(true);
       try {
-        const response = await authFetch(`/api/chunks/${source.chunk_id}?context_size=2`);
+        const response = await authFetch(`/api/chunks/${source.chunk_id}?context_size=0`);
         if (response.ok) {
           const data = await response.json();
           setChunkContext(data);
@@ -376,10 +376,11 @@ export default function Home() {
                   <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
                     {selectedSource.source}
                   </h3>
-                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    {selectedSource.page ? `Page ${selectedSource.page}` : 'Source Document'}
-                    {chunkContext && ` • Chunk ${chunkContext.chunk_index + 1} of ${chunkContext.total_chunks}`}
-                  </p>
+                  {selectedSource.page && (
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                      Page {selectedSource.page}
+                    </p>
+                  )}
                 </div>
               </div>
               <button
@@ -797,7 +798,16 @@ export default function Home() {
                                 Sources
                               </p>
                               <div className="flex flex-wrap gap-2">
-                                {message.sources.map((source, idx) => (
+                                {/* Deduplicate sources by filename, keeping the one with highest similarity */}
+                                {Object.values(
+                                  message.sources.reduce((acc, source) => {
+                                    const key = source.source;
+                                    if (!acc[key] || (source.similarity || 0) > (acc[key].similarity || 0)) {
+                                      acc[key] = source;
+                                    }
+                                    return acc;
+                                  }, {} as Record<string, Source>)
+                                ).map((source, idx) => (
                                   <button
                                     key={idx}
                                     onClick={() => handleSourceClick(source)}

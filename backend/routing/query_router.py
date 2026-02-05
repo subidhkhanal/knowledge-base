@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 from enum import Enum
+import re
 from groq import Groq
 from backend.config import GROQ_API_KEY, GROQ_MODEL
 
@@ -12,6 +13,47 @@ class RouteType(str, Enum):
     GREETING = "GREETING"        # Greetings, small talk
     CLARIFICATION = "CLARIFICATION"  # Vague/unclear queries
     OUT_OF_SCOPE = "OUT_OF_SCOPE"    # Requests outside capabilities
+    SUMMARY = "SUMMARY"          # Summarize a document or topic
+    COMPARISON = "COMPARISON"    # Compare two or more things
+    FOLLOW_UP = "FOLLOW_UP"      # Follow-up on previous conversation
+
+
+# Keyword patterns for fast pre-filtering (avoids LLM call)
+GREETING_PATTERNS = [
+    r"^(hi|hello|hey|howdy|greetings|good\s*(morning|afternoon|evening))(\s+there)?[\s!?.]*$",
+    r"^(thanks|thank\s*you|thx|ty)[\s!?.]*$",
+    r"^(bye|goodbye|see\s*you|later)[\s!?.]*$",
+    r"^(how\s*are\s*you|what'?s\s*up|sup)[\s!?.]*$",
+]
+
+META_PATTERNS = [
+    r"(what|which|list|show|display).*(documents?|files?|sources?).*(have|uploaded|available|stored)",
+    r"(what|how\s*many).*(documents?|files?).*(do\s*i|i)\s*have",
+    r"^(list|show)\s*(my\s*)?(documents?|files?|sources?)[\s!?.]*$",
+    r"what\s*(can|do)\s*you\s*(do|know|have)",
+    r"(your|the)\s*capabilities",
+]
+
+SUMMARY_PATTERNS = [
+    r"^summarize\s+",
+    r"^(give|provide|create)\s*(me\s*)?(a\s*)?summary",
+    r"^(what\s*is\s*the\s*)?(main|key)\s*(points?|ideas?|takeaways?)",
+    r"^tldr\s*",
+    r"summarize\s*(this|the|that)",
+]
+
+COMPARISON_PATTERNS = [
+    r"compare\s+.+\s+(and|with|to|vs\.?)\s+",
+    r"(difference|differences)\s*(between|of)",
+    r"(how|what).*(different|similar|compare)",
+    r".+\s+vs\.?\s+.+",
+]
+
+CLARIFICATION_PATTERNS = [
+    r"^(more|details?|explain|elaborate|continue)[\s!?.]*$",
+    r"^(yes|no|ok|okay|sure|yep|nope)[\s!?.]*$",
+    r"^(what|huh|hmm)[\s!?.]*$",
+]
 
 
 @dataclass
@@ -24,15 +66,18 @@ class RouteResult:
 
 CLASSIFICATION_PROMPT = """You are a query classifier for a personal knowledge base assistant. Classify the user's query into ONE of these categories:
 
-KNOWLEDGE - Questions seeking information that would be found in documents (facts, details, explanations, "what is", "how does", "explain", etc.)
-META - Questions about the system itself, what documents exist, capabilities, or how the assistant works ("what documents", "what do you have", "list my files", "what can you do")
-GREETING - Greetings, thanks, small talk, casual conversation ("hello", "hi", "thanks", "bye", "how are you")
-CLARIFICATION - Query is too vague or ambiguous to process meaningfully (single words like "details", "more", "explain", or unclear references)
-OUT_OF_SCOPE - Requests for actions outside capabilities like writing code, sending emails, browsing web, calculations, or tasks unrelated to the knowledge base
+KNOWLEDGE - Questions seeking specific information from documents (facts, details, explanations, "what is", "how does", "explain X", etc.)
+SUMMARY - Requests to summarize documents or topics ("summarize", "main points", "key takeaways", "tldr", "overview of")
+COMPARISON - Requests to compare two or more things ("compare X and Y", "difference between", "X vs Y", "how is X different from Y")
+FOLLOW_UP - Follow-up questions referencing previous context ("tell me more about that", "what about the other one", "and the second point?")
+META - Questions about the system itself, what documents exist, or capabilities ("what documents do I have", "list my files", "what can you do")
+GREETING - Greetings, thanks, small talk ("hello", "hi", "thanks", "bye", "how are you")
+CLARIFICATION - Query is too vague or ambiguous (single words like "details", "more", or unclear references without context)
+OUT_OF_SCOPE - Requests outside capabilities (writing code, sending emails, browsing web, calculations)
 
 User Query: "{query}"
 
-Respond with ONLY the category name (KNOWLEDGE, META, GREETING, CLARIFICATION, or OUT_OF_SCOPE), nothing else."""
+Respond with ONLY the category name, nothing else."""
 
 
 class QueryRouter:
@@ -41,6 +86,48 @@ class QueryRouter:
     def __init__(self):
         self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
         self.model = GROQ_MODEL
+
+        # Compile regex patterns for faster matching
+        self._greeting_re = [re.compile(p, re.IGNORECASE) for p in GREETING_PATTERNS]
+        self._meta_re = [re.compile(p, re.IGNORECASE) for p in META_PATTERNS]
+        self._summary_re = [re.compile(p, re.IGNORECASE) for p in SUMMARY_PATTERNS]
+        self._comparison_re = [re.compile(p, re.IGNORECASE) for p in COMPARISON_PATTERNS]
+        self._clarification_re = [re.compile(p, re.IGNORECASE) for p in CLARIFICATION_PATTERNS]
+
+    def _keyword_prefilter(self, query: str) -> Optional[Tuple[RouteType, str]]:
+        """
+        Fast keyword-based routing for obvious cases.
+        Returns (RouteType, reasoning) if matched, None otherwise.
+        """
+        query_clean = query.strip()
+
+        # Check greeting patterns
+        for pattern in self._greeting_re:
+            if pattern.search(query_clean):
+                return (RouteType.GREETING, "Keyword match: greeting pattern")
+
+        # Check meta patterns
+        for pattern in self._meta_re:
+            if pattern.search(query_clean):
+                return (RouteType.META, "Keyword match: meta/system query")
+
+        # Check summary patterns
+        for pattern in self._summary_re:
+            if pattern.search(query_clean):
+                return (RouteType.SUMMARY, "Keyword match: summary request")
+
+        # Check comparison patterns
+        for pattern in self._comparison_re:
+            if pattern.search(query_clean):
+                return (RouteType.COMPARISON, "Keyword match: comparison request")
+
+        # Check clarification patterns (very short/vague queries)
+        if len(query_clean.split()) <= 2:
+            for pattern in self._clarification_re:
+                if pattern.search(query_clean):
+                    return (RouteType.CLARIFICATION, "Keyword match: vague/unclear query")
+
+        return None
 
     def _build_prompt(self, query: str) -> str:
         """Build the classification prompt."""
@@ -57,6 +144,9 @@ class QueryRouter:
             "GREETING": RouteType.GREETING,
             "CLARIFICATION": RouteType.CLARIFICATION,
             "OUT_OF_SCOPE": RouteType.OUT_OF_SCOPE,
+            "SUMMARY": RouteType.SUMMARY,
+            "COMPARISON": RouteType.COMPARISON,
+            "FOLLOW_UP": RouteType.FOLLOW_UP,
         }
 
         # Try exact match first
@@ -75,12 +165,25 @@ class QueryRouter:
         """
         Classify a query into a route type.
 
+        Uses keyword pre-filter first for speed, falls back to LLM for complex cases.
+
         Args:
             query: The user's query string
 
         Returns:
             RouteResult with the classified route type
         """
+        # Try fast keyword pre-filter first
+        prefilter_result = self._keyword_prefilter(query)
+        if prefilter_result:
+            route_type, reasoning = prefilter_result
+            return RouteResult(
+                route_type=route_type,
+                confidence=0.9,
+                reasoning=reasoning
+            )
+
+        # Fall back to LLM for complex/ambiguous queries
         if not self.groq_client:
             # No API key, default to KNOWLEDGE route
             return RouteResult(
@@ -120,6 +223,17 @@ class QueryRouter:
 
     def classify_sync(self, query: str) -> RouteResult:
         """Synchronous version of classify."""
+        # Try fast keyword pre-filter first
+        prefilter_result = self._keyword_prefilter(query)
+        if prefilter_result:
+            route_type, reasoning = prefilter_result
+            return RouteResult(
+                route_type=route_type,
+                confidence=0.9,
+                reasoning=reasoning
+            )
+
+        # Fall back to LLM
         if not self.groq_client:
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,
