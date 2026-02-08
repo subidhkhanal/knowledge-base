@@ -8,8 +8,8 @@ from backend.config import TOP_K, SIMILARITY_THRESHOLD, USE_RERANKING, RERANK_TO
 class QueryEngine:
     """RAG query engine combining retrieval, reranking, and LLM generation."""
 
-    def __init__(self):
-        self.vector_store = VectorStore()
+    def __init__(self, vector_store: VectorStore = None):
+        self.vector_store = vector_store or VectorStore()
         self.llm = LLMReasoning()
         self.reranker = Reranker()
 

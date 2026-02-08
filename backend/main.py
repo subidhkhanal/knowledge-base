@@ -79,7 +79,7 @@ def get_components():
             )
 
     if query_engine is None:
-        query_engine = QueryEngine()
+        query_engine = QueryEngine(vector_store=vector_store)
 
     # Initialize query router and handlers (if routing is enabled)
     if query_router is None and ENABLE_QUERY_ROUTING:
