@@ -65,9 +65,11 @@ class RouteResult:
     rewritten_query: Optional[str] = None
 
 
-REWRITE_PROMPT = """Given this conversation history and the user's latest query, rewrite the query to be self-contained by resolving any references like "that", "it", "this document", "the file", etc.
+REWRITE_PROMPT = """Given this conversation history and the user's latest query, rewrite the query to be self-contained by:
+1. Resolving any references like "that", "it", "this document", "the file", etc.
+2. Fixing any spelling mistakes or typos
 
-If the query is already self-contained, return it as-is. Do NOT add extra information or change the intent.
+If the query is already self-contained and has no typos, return it as-is. Do NOT add extra information or change the intent.
 
 Chat History:
 {history}
@@ -75,6 +77,17 @@ Chat History:
 Latest Query: "{query}"
 
 Rewritten Query:"""
+
+
+CORRECTION_PROMPT = """Fix any spelling mistakes or typos in this query. Return ONLY the corrected query text, nothing else.
+
+Examples:
+- "what are the main topcs in the bok" → "what are the main topics in the book"
+- "explain the concpt of meditation" → "explain the concept of meditation"
+- "what is brahmacharya" → "what is brahmacharya"
+
+Query: "{query}"
+"""
 
 
 CLASSIFICATION_PROMPT = """You are a query classifier for a personal knowledge base assistant. Classify the user's query into ONE of these categories:
@@ -180,6 +193,30 @@ class QueryRouter:
         except Exception:
             return None
 
+    def _correct_query(self, query: str) -> Optional[str]:
+        """
+        Fix spelling mistakes/typos in a query (no chat history needed).
+        Returns the corrected query, or None if no changes.
+        """
+        if not self.groq_client:
+            return None
+
+        prompt = CORRECTION_PROMPT.format(query=query)
+
+        try:
+            response = self.groq_client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=150
+            )
+            corrected = response.choices[0].message.content.strip()
+            if corrected and corrected.lower() != query.lower():
+                return corrected
+            return None
+        except Exception:
+            return None
+
     def _build_prompt(self, query: str) -> str:
         """Build the classification prompt."""
         return CLASSIFICATION_PROMPT.format(query=query)
@@ -236,10 +273,12 @@ class QueryRouter:
                 reasoning=reasoning
             )
 
-        # Rewrite query if chat history is provided
+        # Rewrite (with history) or correct typos (without history)
         rewritten_query = None
         if chat_history:
             rewritten_query = self._rewrite_query(query, chat_history)
+        else:
+            rewritten_query = self._correct_query(query)
 
         # Use rewritten query for classification if available
         classify_query = rewritten_query or query
