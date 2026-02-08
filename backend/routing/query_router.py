@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Optional, Tuple, List, Dict
 from enum import Enum
 import re
 from groq import Groq
@@ -62,6 +62,19 @@ class RouteResult:
     route_type: RouteType
     confidence: float = 1.0
     reasoning: Optional[str] = None
+    rewritten_query: Optional[str] = None
+
+
+REWRITE_PROMPT = """Given this conversation history and the user's latest query, rewrite the query to be self-contained by resolving any references like "that", "it", "this document", "the file", etc.
+
+If the query is already self-contained, return it as-is. Do NOT add extra information or change the intent.
+
+Chat History:
+{history}
+
+Latest Query: "{query}"
+
+Rewritten Query:"""
 
 
 CLASSIFICATION_PROMPT = """You are a query classifier for a personal knowledge base assistant. Classify the user's query into ONE of these categories:
@@ -129,6 +142,44 @@ class QueryRouter:
 
         return None
 
+    def _format_history(self, chat_history: List[Dict[str, str]]) -> str:
+        """Format chat history into a readable string."""
+        lines = []
+        for msg in chat_history:
+            role = msg.get("role", "user").capitalize()
+            content = msg.get("content", "")
+            # Truncate long messages to save tokens
+            if len(content) > 200:
+                content = content[:200] + "..."
+            lines.append(f"{role}: {content}")
+        return "\n".join(lines)
+
+    def _rewrite_query(self, query: str, chat_history: List[Dict[str, str]]) -> Optional[str]:
+        """
+        Rewrite a query using chat history to resolve references.
+        Returns the rewritten query, or None if rewrite fails.
+        """
+        if not self.groq_client or not chat_history:
+            return None
+
+        history_str = self._format_history(chat_history)
+        prompt = REWRITE_PROMPT.format(history=history_str, query=query)
+
+        try:
+            response = self.groq_client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=150
+            )
+            rewritten = response.choices[0].message.content.strip()
+            # Only use rewrite if it's meaningfully different
+            if rewritten and rewritten.lower() != query.lower():
+                return rewritten
+            return None
+        except Exception:
+            return None
+
     def _build_prompt(self, query: str) -> str:
         """Build the classification prompt."""
         return CLASSIFICATION_PROMPT.format(query=query)
@@ -161,17 +212,19 @@ class QueryRouter:
         # Default to KNOWLEDGE if unclear
         return RouteType.KNOWLEDGE
 
-    async def classify(self, query: str) -> RouteResult:
+    async def classify(self, query: str, chat_history: Optional[List[Dict[str, str]]] = None) -> RouteResult:
         """
         Classify a query into a route type.
 
         Uses keyword pre-filter first for speed, falls back to LLM for complex cases.
+        When chat_history is provided, rewrites referential queries before classification.
 
         Args:
             query: The user's query string
+            chat_history: Optional list of previous messages for context
 
         Returns:
-            RouteResult with the classified route type
+            RouteResult with the classified route type and optional rewritten_query
         """
         # Try fast keyword pre-filter first
         prefilter_result = self._keyword_prefilter(query)
@@ -183,16 +236,24 @@ class QueryRouter:
                 reasoning=reasoning
             )
 
+        # Rewrite query if chat history is provided
+        rewritten_query = None
+        if chat_history:
+            rewritten_query = self._rewrite_query(query, chat_history)
+
+        # Use rewritten query for classification if available
+        classify_query = rewritten_query or query
+
         # Fall back to LLM for complex/ambiguous queries
         if not self.groq_client:
-            # No API key, default to KNOWLEDGE route
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,
                 confidence=0.5,
-                reasoning="No Groq API key available, defaulting to KNOWLEDGE"
+                reasoning="No Groq API key available, defaulting to KNOWLEDGE",
+                rewritten_query=rewritten_query
             )
 
-        prompt = self._build_prompt(query)
+        prompt = self._build_prompt(classify_query)
 
         try:
             response = self.groq_client.chat.completions.create(
@@ -200,8 +261,8 @@ class QueryRouter:
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,  # Low temperature for consistent classification
-                max_tokens=20     # We only need a single word response
+                temperature=0.1,
+                max_tokens=20
             )
 
             llm_response = response.choices[0].message.content
@@ -210,15 +271,16 @@ class QueryRouter:
             return RouteResult(
                 route_type=route_type,
                 confidence=1.0,
-                reasoning=f"LLM classified as: {llm_response}"
+                reasoning=f"LLM classified as: {llm_response}",
+                rewritten_query=rewritten_query
             )
 
         except Exception as e:
-            # On error, default to KNOWLEDGE route (full RAG pipeline)
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,
                 confidence=0.5,
-                reasoning=f"Classification error: {str(e)}, defaulting to KNOWLEDGE"
+                reasoning=f"Classification error: {str(e)}, defaulting to KNOWLEDGE",
+                rewritten_query=rewritten_query
             )
 
     def classify_sync(self, query: str) -> RouteResult:

@@ -347,25 +347,30 @@ and what couldn't be found."""
         user_id: str,
         top_k: int = 5,
         threshold: float = 0.3,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        rewritten_query: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Route to appropriate handler based on route type.
 
         Args:
             route_type: The classified route type
-            query: User's query
+            query: User's original query
             user_id: User's ID
             top_k: Number of chunks for KNOWLEDGE queries
             threshold: Similarity threshold for KNOWLEDGE queries
             source_filter: Optional source filter for KNOWLEDGE queries
+            rewritten_query: Context-resolved query (if references were resolved)
 
         Returns:
             Response dict with answer, sources, etc.
         """
+        # Use rewritten query for RAG-based routes, original for others
+        effective_query = rewritten_query or query
+
         if route_type == RouteType.KNOWLEDGE:
             return await self.handle_knowledge(
-                query, user_id, top_k, threshold, source_filter
+                effective_query, user_id, top_k, threshold, source_filter
             )
         elif route_type == RouteType.META:
             return await self.handle_meta(query, user_id)
@@ -377,18 +382,17 @@ and what couldn't be found."""
             return await self.handle_out_of_scope(query)
         elif route_type == RouteType.SUMMARY:
             return await self.handle_summary(
-                query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
+                effective_query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
             )
         elif route_type == RouteType.COMPARISON:
             return await self.handle_comparison(
-                query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
+                effective_query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
             )
         elif route_type == RouteType.FOLLOW_UP:
             return await self.handle_follow_up(
-                query, user_id, top_k, threshold, source_filter
+                effective_query, user_id, top_k, threshold, source_filter
             )
         else:
-            # Default to KNOWLEDGE if unknown route type
             return await self.handle_knowledge(
-                query, user_id, top_k, threshold, source_filter
+                effective_query, user_id, top_k, threshold, source_filter
             )

@@ -109,6 +109,7 @@ class QueryRequest(BaseModel):
     top_k: int = 5
     threshold: float = 0.3
     source_filter: Optional[str] = None
+    chat_history: Optional[List[dict]] = None
 
 
 class TextUploadRequest(BaseModel):
@@ -335,17 +336,21 @@ async def query(
 
     # Use query routing if enabled
     if ENABLE_QUERY_ROUTING and components["query_router"] is not None:
-        # Classify the query
-        route_result = await components["query_router"].classify(request.question)
+        # Classify the query (with chat history for reference resolution)
+        route_result = await components["query_router"].classify(
+            request.question,
+            chat_history=request.chat_history
+        )
 
-        # Route to appropriate handler
+        # Route to appropriate handler (use rewritten query if available)
         result = await components["route_handlers"].handle(
             route_type=route_result.route_type,
             query=request.question,
             user_id=user_id,
             top_k=request.top_k,
             threshold=request.threshold,
-            source_filter=request.source_filter
+            source_filter=request.source_filter,
+            rewritten_query=route_result.rewritten_query
         )
     else:
         # Fallback to direct query engine (routing disabled)

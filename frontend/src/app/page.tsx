@@ -211,11 +211,18 @@ export default function Home() {
     setIsLoading(true);
 
     try {
+      // Send last 6 messages as chat history for context resolution
+      const chatHistory = messages.slice(-6).map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+
       const response = await authFetch("/api/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question: input.trim()
+          question: input.trim(),
+          chat_history: chatHistory.length > 0 ? chatHistory : undefined
         }),
       });
 
