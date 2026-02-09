@@ -93,13 +93,16 @@ Examples:
 - "hello" → GREETING | hello
 - "what documets do i have" → META | what documents do i have
 - "what is brahmacharya" → KNOWLEDGE | what is brahmacharya
+- "explain each document in detail" → META | explain each document in detail
+- "tell me about all my books" → META | tell me about all my books
+- "what does every document talk about" → META | what does every document talk about
 
 Categories:
 KNOWLEDGE - Questions seeking information from documents
 SUMMARY - Requests to summarize documents or topics
 COMPARISON - Compare two or more things
 FOLLOW_UP - References previous context
-META - Questions about the system/documents/capabilities
+META - Questions about the system, what documents exist, document overviews, or capabilities. Includes queries about "each/all/every document" or asking what the collection contains.
 GREETING - Greetings, small talk
 CLARIFICATION - Too vague or ambiguous
 OUT_OF_SCOPE - Outside capabilities (code, emails, web, calculations)

@@ -27,6 +27,9 @@ data/chromadb/
 *.swp
 *.swo
 
+# Claude Code
+.claude/
+
 # Node/Frontend
 frontend/node_modules/
 frontend/.next/
