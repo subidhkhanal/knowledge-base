@@ -1,37 +1,46 @@
 @import "tailwindcss";
 
 :root {
-  /* Dark theme colors - deep and elegant */
-  --bg-primary: #0a0a0b;
-  --bg-primary-rgb: 10, 10, 11;
-  --bg-secondary: #111113;
-  --bg-tertiary: #18181b;
-  --bg-elevated: #1f1f23;
-  --bg-hover: #27272a;
+  /* Backgrounds - deep dark palette */
+  --bg-deep: #020203;
+  --bg-primary: #050506;
+  --bg-primary-rgb: 5, 5, 6;
+  --bg-secondary: #0a0a0c;
+  --bg-tertiary: rgba(255, 255, 255, 0.05);
+  --bg-elevated: rgba(255, 255, 255, 0.08);
+  --bg-hover: rgba(255, 255, 255, 0.08);
 
-  /* Text colors */
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
+  /* Text - softer whites */
+  --text-primary: #EDEDEF;
+  --text-secondary: #8A8F98;
+  --text-tertiary: rgba(255, 255, 255, 0.60);
 
-  /* Accent - elegant violet */
-  --accent: #8b5cf6;
-  --accent-hover: #7c3aed;
-  --accent-subtle: rgba(139, 92, 246, 0.1);
-  --accent-glow: rgba(139, 92, 246, 0.15);
+  /* Accent - purple/violet */
+  --accent: #7C3AED;
+  --accent-hover: #8B5CF6;
+  --accent-subtle: rgba(124, 58, 237, 0.1);
+  --accent-glow: rgba(124, 58, 237, 0.3);
 
   /* Borders */
   --border: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.10);
+  --border-accent: rgba(124, 58, 237, 0.30);
 
   /* Status */
   --success: #22c55e;
   --success-bg: rgba(34, 197, 94, 0.1);
   --error: #ef4444;
   --error-bg: rgba(239, 68, 68, 0.1);
+
+  /* Simplified shadows */
+  --shadow-card: 0 0 0 1px rgba(255,255,255,0.06);
+  --shadow-card-hover: 0 0 0 1px rgba(255,255,255,0.10);
+  --shadow-accent-glow: 0 0 0 1px rgba(124,58,237,0.4);
+  --shadow-inner-highlight: none;
 }
 
 @theme inline {
+  --color-bg-deep: var(--bg-deep);
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-bg-tertiary: var(--bg-tertiary);
@@ -42,7 +51,11 @@
   --color-text-tertiary: var(--text-tertiary);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-glow: var(--accent-glow);
   --color-border: var(--border);
+  --color-border-hover: var(--border-hover);
+  --color-border-accent: var(--border-accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -53,14 +66,17 @@
 
 html {
   color-scheme: dark;
+  height: 100%;
 }
 
 body {
-  background: var(--bg-primary);
+  background: #0a0a0a;
   color: var(--text-primary);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  overflow: hidden;
 }
 
 /* Scrollbar styling */
@@ -94,9 +110,13 @@ body {
   outline-offset: 2px;
 }
 
+textarea:focus-visible {
+  outline: none;
+}
+
 /* Smooth transitions */
 button, a, input, textarea {
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Placeholder styling */
@@ -106,13 +126,8 @@ button, a, input, textarea {
 
 /* Custom animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes pulse-subtle {
@@ -120,59 +135,44 @@ button, a, input, textarea {
   50% { opacity: 1; }
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-
-@keyframes glow {
-  0%, 100% { box-shadow: 0 0 5px rgba(139, 92, 246, 0.3); }
-  50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.6); }
-}
-
 .animate-fade-in {
-  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-slide-down {
-  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-pulse-subtle {
   animation: pulse-subtle 1.5s ease-in-out infinite;
 }
 
-/* Glass effect */
-.glass {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
+/* Shadow utilities */
+.shadow-card {
+  box-shadow: var(--shadow-card);
 }
 
-/* Glow effect on hover */
-.glow-hover:hover {
-  box-shadow: 0 0 20px var(--accent-glow);
+.shadow-accent-glow {
+  box-shadow: var(--shadow-accent-glow);
 }
 
 /* Input styling */
 input[type="text"],
-input[type="email"],
-textarea {
+input[type="email"] {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   color: var(--text-primary);
 }
 
 input[type="text"]:focus,
-input[type="email"]:focus,
-textarea:focus {
+input[type="email"]:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Markdown prose styles for chat messages */
@@ -204,6 +204,7 @@ textarea:focus {
   margin-top: 1.5em;
   margin-bottom: 0.75em;
   line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
 .prose-chat h1 {

@@ -1,29 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-
-interface Source {
-  source: string;
-  page: number | null;
-  similarity: number;
-}
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  sources?: Source[];
-  provider?: string;
-  timestamp?: number;
-}
-
-interface Conversation {
-  id: string;
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  messages: Message[];
-}
+import type { Message, Conversation } from "@/types/chat";
 
 const STORAGE_KEY = "kb_conversations";
 const MAX_CONVERSATIONS = 50;

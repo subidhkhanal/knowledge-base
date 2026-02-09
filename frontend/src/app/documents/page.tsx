@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { useApi } from "@/hooks/useApi";
+import { Header } from "@/components/Header";
 
 interface Source {
   source: string;
@@ -96,33 +98,31 @@ function DocumentsContent() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-        <Link href="/" className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
-          Knowledge Base
-        </Link>
-      </header>
+    <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
+      <Header />
 
       {/* Content */}
       <main className="mx-auto max-w-2xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-medium" style={{ color: 'var(--text-primary)' }}>Documents</h1>
+            <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>Documents</h1>
             {stats && (
-              <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
                 {stats.total_sources} documents
               </p>
             )}
           </div>
           <button
             onClick={fetchData}
-            className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+            className="flex h-9 w-9 items-center justify-center rounded-lg cursor-pointer hover:bg-bg-hover"
+            style={{
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+            }}
           >
             <svg
-              className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
-              style={{ color: 'var(--text-secondary)' }}
+              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              style={{ color: "var(--text-secondary)" }}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -135,7 +135,7 @@ function DocumentsContent() {
         {/* Loading */}
         {isLoading && (
           <div className="flex justify-center py-16">
-            <svg className="h-6 w-6 animate-spin" style={{ color: 'var(--accent)' }} viewBox="0 0 24 24" fill="none">
+            <svg className="h-6 w-6 animate-spin" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
@@ -144,11 +144,11 @@ function DocumentsContent() {
 
         {/* Error */}
         {error && (
-          <div className="flex items-center gap-3 rounded-xl p-4" style={{ background: 'var(--error-bg)' }}>
-            <svg className="h-5 w-5" style={{ color: 'var(--error)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center gap-3 rounded-xl p-4" style={{ background: "var(--error-bg)" }}>
+            <svg className="h-5 w-5" style={{ color: "var(--error)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-sm" style={{ color: 'var(--error)' }}>{error}</p>
+            <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>
           </div>
         )}
 
@@ -158,19 +158,33 @@ function DocumentsContent() {
             {documents.length === 0 ? (
               <div
                 className="flex flex-col items-center justify-center rounded-xl py-16 text-center"
-                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+                style={{
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border)",
+                  boxShadow: "var(--shadow-card)",
+                }}
               >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: 'var(--accent-subtle)' }}>
-                  <svg className="h-6 w-6" style={{ color: 'var(--accent)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div
+                  className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
+                  style={{
+                    background: "var(--accent-subtle)",
+                    border: "1px solid var(--border-accent)",
+                  }}
+                >
+                  <svg className="h-6 w-6" style={{ color: "var(--accent)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                 </div>
-                <p className="mb-1 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>No documents yet</p>
-                <p className="mb-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>Upload content from the main page</p>
+                <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>No documents yet</p>
+                <p className="mb-4 text-xs" style={{ color: "var(--text-tertiary)" }}>Upload content from the main page</p>
                 <Link
                   href="/"
                   className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-                  style={{ background: 'var(--accent)', color: 'white' }}
+                  style={{
+                    background: "var(--accent)",
+                    color: "white",
+                    boxShadow: "var(--shadow-accent-glow)",
+                  }}
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -181,24 +195,46 @@ function DocumentsContent() {
             ) : (
               <div className="space-y-2">
                 {documents.map((document, index) => (
-                  <div
+                  <motion.div
                     key={document.source}
-                    className="group flex items-center justify-between rounded-xl px-4 py-3 transition-colors animate-fade-in"
-                    style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', animationDelay: `${index * 0.03}s` }}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.6,
+                      ease: [0.16, 1, 0.3, 1],
+                      delay: index * 0.05,
+                    }}
+                    className="group flex items-center justify-between rounded-xl px-4 py-3"
+                    style={{
+                      background: "var(--bg-secondary)",
+                      border: "1px solid var(--border)",
+                    }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}>
+                      <div
+                        className="flex h-9 w-9 items-center justify-center rounded-lg"
+                        style={{
+                          background: "var(--bg-tertiary)",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
                         {getDocumentIcon(document.source_type)}
                       </div>
                       <div>
-                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{document.source}</p>
+                        <p className="text-sm font-medium tracking-tight" style={{ color: "var(--text-primary)" }}>{document.source}</p>
                       </div>
                     </div>
                     <button
                       onClick={() => handleDelete(document.source)}
                       disabled={deletingDocument === document.source}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg opacity-0 transition-all group-hover:opacity-100 disabled:opacity-50"
-                      style={{ color: 'var(--text-tertiary)' }}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg opacity-0 transition-all group-hover:opacity-100 disabled:opacity-50 cursor-pointer"
+                      style={{ color: "var(--text-tertiary)" }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "var(--error)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "var(--text-tertiary)";
+                      }}
                     >
                       {deletingDocument === document.source ? (
                         <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -211,7 +247,7 @@ function DocumentsContent() {
                         </svg>
                       )}
                     </button>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             )}

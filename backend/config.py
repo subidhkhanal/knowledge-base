@@ -6,10 +6,6 @@ load_dotenv()
 
 # Base paths
 BASE_DIR = Path(__file__).parent.parent
-DATA_DIR = BASE_DIR / "data"
-
-# Ensure directories exist
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Upload settings
 MAX_UPLOAD_SIZE_MB = 10
