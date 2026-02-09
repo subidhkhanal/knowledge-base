@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 import httpx
 from groq import Groq
 from backend.config import (
@@ -94,6 +94,53 @@ Answer the question based on the context above. Do NOT include source citations 
             return response.choices[0].message.content
         except Exception:
             return None
+
+    def _call_groq_stream(self, prompt: str):
+        """Call Groq API with streaming, yielding tokens."""
+        if not self.groq_client:
+            return
+
+        response = self.groq_client.chat.completions.create(
+            model=self.groq_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=LLM_TEMPERATURE,
+            max_tokens=LLM_MAX_TOKENS,
+            stream=True
+        )
+        for chunk in response:
+            token = chunk.choices[0].delta.content
+            if token:
+                yield token
+
+    async def generate_response_stream(
+        self,
+        query: str,
+        chunks: List[Dict[str, Any]]
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream a response token by token using retrieved chunks."""
+        if not chunks:
+            yield {"type": "token", "content": "I don't have any relevant information in my knowledge base to answer this question."}
+            yield {"type": "done", "sources": [], "chunks_used": 0, "provider": None}
+            return
+
+        context = self._format_context(chunks)
+        prompt = self._build_prompt(query, context)
+
+        try:
+            for token in self._call_groq_stream(prompt):
+                yield {"type": "token", "content": token}
+        except Exception:
+            yield {"type": "token", "content": "I'm unable to generate a response. Please check your API keys."}
+
+        yield {
+            "type": "done",
+            "sources": self._extract_sources(chunks),
+            "chunks_used": len(chunks),
+            "provider": "groq"
+        }
 
     async def _call_ollama(self, prompt: str) -> Optional[str]:
         """Call Ollama API (optional local fallback)."""

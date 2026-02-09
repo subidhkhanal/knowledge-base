@@ -79,12 +79,30 @@ Latest Query: "{query}"
 Rewritten Query:"""
 
 
-CORRECTION_PROMPT = """Fix any spelling mistakes or typos in this query. Return ONLY the corrected query text, nothing else.
+CLASSIFY_AND_CORRECT_PROMPT = """You are a query classifier for a personal knowledge base assistant.
+
+1. Fix any spelling mistakes or typos in the query
+2. Classify it into ONE category: KNOWLEDGE, SUMMARY, COMPARISON, FOLLOW_UP, META, GREETING, CLARIFICATION, OUT_OF_SCOPE
+
+Respond in this EXACT format (category | corrected query):
+CATEGORY | corrected query
 
 Examples:
-- "what are the main topcs in the bok" → "what are the main topics in the book"
-- "explain the concpt of meditation" → "explain the concept of meditation"
-- "what is brahmacharya" → "what is brahmacharya"
+- "explain the concpt on the boks" → KNOWLEDGE | explain the concept on the books
+- "summarize the main topcs" → SUMMARY | summarize the main topics
+- "hello" → GREETING | hello
+- "what documets do i have" → META | what documents do i have
+- "what is brahmacharya" → KNOWLEDGE | what is brahmacharya
+
+Categories:
+KNOWLEDGE - Questions seeking information from documents
+SUMMARY - Requests to summarize documents or topics
+COMPARISON - Compare two or more things
+FOLLOW_UP - References previous context
+META - Questions about the system/documents/capabilities
+GREETING - Greetings, small talk
+CLARIFICATION - Too vague or ambiguous
+OUT_OF_SCOPE - Outside capabilities (code, emails, web, calculations)
 
 Query: "{query}"
 """
@@ -92,14 +110,14 @@ Query: "{query}"
 
 CLASSIFICATION_PROMPT = """You are a query classifier for a personal knowledge base assistant. Classify the user's query into ONE of these categories:
 
-KNOWLEDGE - Questions seeking specific information from documents (facts, details, explanations, "what is", "how does", "explain X", etc.)
-SUMMARY - Requests to summarize documents or topics ("summarize", "main points", "key takeaways", "tldr", "overview of")
-COMPARISON - Requests to compare two or more things ("compare X and Y", "difference between", "X vs Y", "how is X different from Y")
-FOLLOW_UP - Follow-up questions referencing previous context ("tell me more about that", "what about the other one", "and the second point?")
-META - Questions about the system itself, what documents exist, or capabilities ("what documents do I have", "list my files", "what can you do")
-GREETING - Greetings, thanks, small talk ("hello", "hi", "thanks", "bye", "how are you")
-CLARIFICATION - Query is too vague or ambiguous (single words like "details", "more", or unclear references without context)
-OUT_OF_SCOPE - Requests outside capabilities (writing code, sending emails, browsing web, calculations)
+KNOWLEDGE - Questions seeking specific information from documents
+SUMMARY - Requests to summarize documents or topics
+COMPARISON - Compare two or more things
+FOLLOW_UP - Follow-up questions referencing previous context
+META - Questions about the system itself, what documents exist, or capabilities
+GREETING - Greetings, thanks, small talk
+CLARIFICATION - Query is too vague or ambiguous
+OUT_OF_SCOPE - Requests outside capabilities
 
 User Query: "{query}"
 
@@ -162,8 +180,8 @@ class QueryRouter:
             role = msg.get("role", "user").capitalize()
             content = msg.get("content", "")
             # Truncate long messages to save tokens
-            if len(content) > 200:
-                content = content[:200] + "..."
+            if len(content) > 500:
+                content = content[:500] + "..."
             lines.append(f"{role}: {content}")
         return "\n".join(lines)
 
@@ -193,15 +211,15 @@ class QueryRouter:
         except Exception:
             return None
 
-    def _correct_query(self, query: str) -> Optional[str]:
+    def _classify_and_correct(self, query: str) -> Tuple[RouteType, Optional[str]]:
         """
-        Fix spelling mistakes/typos in a query (no chat history needed).
-        Returns the corrected query, or None if no changes.
+        Classify query AND fix typos in a single LLM call.
+        Returns (route_type, corrected_query_or_None).
         """
         if not self.groq_client:
-            return None
+            return (RouteType.KNOWLEDGE, None)
 
-        prompt = CORRECTION_PROMPT.format(query=query)
+        prompt = CLASSIFY_AND_CORRECT_PROMPT.format(query=query)
 
         try:
             response = self.groq_client.chat.completions.create(
@@ -210,12 +228,29 @@ class QueryRouter:
                 temperature=0.1,
                 max_tokens=150
             )
-            corrected = response.choices[0].message.content.strip()
+            raw = response.choices[0].message.content.strip()
+
+            # Parse "CATEGORY | corrected query" format
+            if "|" in raw:
+                parts = raw.split("|", 1)
+                category = parts[0].strip().upper()
+                corrected = parts[1].strip()
+                # Strip wrapping quotes if present
+                corrected = corrected.strip('"\'')
+            else:
+                # Fallback: treat entire response as category
+                category = raw.upper()
+                corrected = None
+
+            route_type = self._parse_response(category)
+
+            # Only return corrected query if it's meaningfully different
             if corrected and corrected.lower() != query.lower():
-                return corrected
-            return None
+                return (route_type, corrected)
+            return (route_type, None)
+
         except Exception:
-            return None
+            return (RouteType.KNOWLEDGE, None)
 
     def _build_prompt(self, query: str) -> str:
         """Build the classification prompt."""
@@ -273,17 +308,20 @@ class QueryRouter:
                 reasoning=reasoning
             )
 
-        # Rewrite (with history) or correct typos (without history)
-        rewritten_query = None
-        if chat_history:
-            rewritten_query = self._rewrite_query(query, chat_history)
-        else:
-            rewritten_query = self._correct_query(query)
+        # No chat history: single LLM call for classify + correct
+        if not chat_history:
+            route_type, corrected = self._classify_and_correct(query)
+            return RouteResult(
+                route_type=route_type,
+                confidence=1.0 if self.groq_client else 0.5,
+                reasoning="Combined classify+correct",
+                rewritten_query=corrected
+            )
 
-        # Use rewritten query for classification if available
+        # With chat history: rewrite first (resolves refs + typos), then classify
+        rewritten_query = self._rewrite_query(query, chat_history)
         classify_query = rewritten_query or query
 
-        # Fall back to LLM for complex/ambiguous queries
         if not self.groq_client:
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,

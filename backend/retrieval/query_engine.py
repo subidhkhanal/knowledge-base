@@ -63,6 +63,20 @@ class QueryEngine:
             "reranked": reranked
         }
 
+    def retrieve(
+        self,
+        question: str,
+        user_id: str,
+        top_k: int = TOP_K,
+        threshold: float = SIMILARITY_THRESHOLD,
+        source_filter: Optional[str] = None,
+        use_reranking: bool = USE_RERANKING
+    ) -> tuple[List[Dict[str, Any]], bool]:
+        """Retrieve and rerank chunks without LLM generation (for streaming)."""
+        return self._retrieve_and_rerank(
+            question, user_id, top_k, threshold, source_filter, use_reranking
+        )
+
     async def query(
         self,
         question: str,

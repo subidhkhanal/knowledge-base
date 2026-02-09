@@ -1,8 +1,10 @@
 import os
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
+import json
 import uvicorn
 
 from backend.ingestion import (
@@ -322,47 +324,63 @@ async def upload_text(
     )
 
 
-@app.post("/api/query", response_model=QueryResponse)
+@app.post("/api/query")
 async def query(
     request: QueryRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Query the knowledge base for the authenticated user."""
+    """Query the knowledge base with streaming SSE response."""
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     user_id = current_user["user_id"]
     components = get_components()
 
-    # Use query routing if enabled
-    if ENABLE_QUERY_ROUTING and components["query_router"] is not None:
-        # Classify the query (with chat history for reference resolution)
-        route_result = await components["query_router"].classify(
-            request.question,
-            chat_history=request.chat_history
-        )
+    async def event_stream():
+        # Send immediately so HTTP response starts right away
+        yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
 
-        # Route to appropriate handler (use rewritten query if available)
-        result = await components["route_handlers"].handle(
-            route_type=route_result.route_type,
-            query=request.question,
-            user_id=user_id,
-            top_k=request.top_k,
-            threshold=request.threshold,
-            source_filter=request.source_filter,
-            rewritten_query=route_result.rewritten_query
-        )
-    else:
-        # Fallback to direct query engine (routing disabled)
-        result = await components["query_engine"].query(
-            question=request.question,
-            user_id=user_id,
-            top_k=request.top_k,
-            threshold=request.threshold,
-            source_filter=request.source_filter
-        )
+        # Use query routing if enabled
+        if ENABLE_QUERY_ROUTING and components["query_router"] is not None:
+            route_result = await components["query_router"].classify(
+                request.question,
+                chat_history=request.chat_history
+            )
 
-    return QueryResponse(**result)
+            async for event in components["route_handlers"].handle_stream(
+                route_type=route_result.route_type,
+                query=request.question,
+                user_id=user_id,
+                top_k=request.top_k,
+                threshold=request.threshold,
+                source_filter=request.source_filter,
+                rewritten_query=route_result.rewritten_query
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        else:
+            # Fallback: stream via query engine LLM
+            qe = components["query_engine"]
+            chunks, reranked = qe.retrieve(
+                question=request.question,
+                user_id=user_id,
+                top_k=request.top_k,
+                threshold=request.threshold,
+                source_filter=request.source_filter
+            )
+            async for event in qe.llm.generate_response_stream(
+                query=request.question,
+                chunks=chunks
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @app.get("/api/sources", response_model=List[SourceResponse])

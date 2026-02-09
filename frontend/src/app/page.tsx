@@ -68,6 +68,8 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
   const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const tokenQueueRef = useRef<{content: string; type: string; sources?: Source[]; provider?: string}[]>([]);
+  const drainIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -196,6 +198,37 @@ export default function Home() {
     xhr.send(formData);
   };
 
+  const startDraining = (assistantId: string) => {
+    if (drainIntervalRef.current) return;
+
+    drainIntervalRef.current = setInterval(() => {
+      const queue = tokenQueueRef.current;
+      if (queue.length === 0) return;
+
+      const item = queue.shift()!;
+
+      if (item.type === "token") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: m.content + item.content }
+              : m
+          )
+        );
+      } else if (item.type === "done") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, sources: item.sources, provider: item.provider }
+              : m
+          )
+        );
+        clearInterval(drainIntervalRef.current!);
+        drainIntervalRef.current = null;
+      }
+    }, 30);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -206,7 +239,14 @@ export default function Home() {
       content: input.trim(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const assistantId = (Date.now() + 1).toString();
+
+    // Add user message and empty assistant message immediately
+    setMessages((prev) => [...prev, userMessage, {
+      id: assistantId,
+      role: "assistant" as const,
+      content: "",
+    }]);
     setInput("");
     setIsLoading(true);
 
@@ -228,24 +268,76 @@ export default function Home() {
 
       if (!response.ok) throw new Error("Query failed");
 
-      const data = await response.json();
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response stream");
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.answer,
-        sources: data.sources,
-        provider: data.provider,
-      };
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6);
+          if (!jsonStr) continue;
+
+          try {
+            const data = JSON.parse(jsonStr);
+
+            if (data.type === "status") {
+              // Status events trigger the HTTP response immediately — no action needed
+            } else if (data.type === "token") {
+              const content = data.content;
+              if (content.length > 20) {
+                const words = content.split(/(\s+)/);
+                for (const word of words) {
+                  if (word) tokenQueueRef.current.push({ type: "token", content: word });
+                }
+              } else {
+                tokenQueueRef.current.push({ type: "token", content: content });
+              }
+              startDraining(assistantId);
+            } else if (data.type === "done") {
+              tokenQueueRef.current.push({ type: "done", content: "", sources: data.sources, provider: data.provider });
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+        }
+      }
     } catch {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Unable to connect. Please ensure the backend is running.",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      // Stop draining on error
+      if (drainIntervalRef.current) {
+        clearInterval(drainIntervalRef.current);
+        drainIntervalRef.current = null;
+      }
+      tokenQueueRef.current = [];
+
+      setMessages((prev) => {
+        // If assistant message was already added, update it with error
+        const hasAssistant = prev.some((m) => m.id === assistantId);
+        if (hasAssistant) {
+          return prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: m.content || "Unable to connect. Please ensure the backend is running." }
+              : m
+          );
+        }
+        return [...prev, {
+          id: assistantId,
+          role: "assistant" as const,
+          content: "Unable to connect. Please ensure the backend is running.",
+        }];
+      });
     } finally {
       setIsLoading(false);
     }
@@ -795,9 +887,17 @@ export default function Home() {
                           className="rounded-2xl px-5 py-4"
                           style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
                         >
-                          <div className="prose-chat">
-                            <ReactMarkdown>{message.content}</ReactMarkdown>
-                          </div>
+                          {message.content ? (
+                            <div className="prose-chat">
+                              <ReactMarkdown>{message.content}</ReactMarkdown>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 py-1">
+                              <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)' }} />
+                              <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.2s' }} />
+                              <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.4s' }} />
+                            </div>
+                          )}
 
                           {message.sources && message.sources.length > 0 && (
                             <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
@@ -839,18 +939,6 @@ export default function Home() {
                     </div>
                   ))}
 
-                  {isLoading && (
-                    <div className="animate-fade-in">
-                      <div
-                        className="inline-flex items-center gap-1 rounded-2xl px-4 py-3"
-                        style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)' }} />
-                        <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.2s' }} />
-                        <span className="h-1.5 w-1.5 rounded-full animate-pulse-subtle" style={{ background: 'var(--text-tertiary)', animationDelay: '0.4s' }} />
-                      </div>
-                    </div>
-                  )}
 
                   <div ref={messagesEndRef} />
                 </div>
