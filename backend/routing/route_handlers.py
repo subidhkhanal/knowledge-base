@@ -118,15 +118,10 @@ class RouteHandlers:
             )
         else:
             # Format document list
-            doc_list = []
-            total_chunks = 0
-            for src in sources:
-                doc_list.append(f"- {src['source']} ({src['source_type']}, {src['chunk_count']} chunks)")
-                total_chunks += src['chunk_count']
+            doc_list = [f"- {src['source']}" for src in sources]
 
             answer = (
-                f"You have {len(sources)} document(s) in your knowledge base "
-                f"with a total of {total_chunks} searchable chunks:\n\n"
+                f"You have {len(sources)} document(s) in your knowledge base:\n\n"
                 + "\n".join(doc_list)
                 + "\n\nYou can ask me questions about any of these documents!"
             )
