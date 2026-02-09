@@ -17,18 +17,12 @@ dist/
 # Data
 data/chromadb/
 *.pdf
-*.mp3
-*.wav
-*.m4a
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Claude Code
-.claude/
 
 # Node/Frontend
 frontend/node_modules/
@@ -43,5 +37,4 @@ Thumbs.db
 *.log
 
 # Whisper cache
-~/.cache/whisper/
 nul
