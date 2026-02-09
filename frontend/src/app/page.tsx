@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
+import { useApi } from "@/hooks/useApi";
 import { useChatHistory } from "@/hooks/useChatHistory";
 
 interface Source {
@@ -42,7 +42,7 @@ interface Toast {
 }
 
 export default function Home() {
-  const { authFetch, createAuthXhr } = useAuthFetch();
+  const { apiFetch, createXhr } = useApi();
   const {
     messages,
     setMessages,
@@ -121,7 +121,7 @@ export default function Home() {
 
     const endpoint = "/api/upload/document";
 
-    const xhr = createAuthXhr("POST", endpoint);
+    const xhr = createXhr("POST", endpoint);
     xhrRef.current = xhr;
 
     xhr.upload.addEventListener("progress", (e) => {
@@ -257,7 +257,7 @@ export default function Home() {
         content: m.content
       }));
 
-      const response = await authFetch("/api/query", {
+      const response = await apiFetch("/api/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -359,7 +359,7 @@ export default function Home() {
     if (source.chunk_id) {
       setIsLoadingContext(true);
       try {
-        const response = await authFetch(`/api/chunks/${source.chunk_id}?context_size=0`);
+        const response = await apiFetch(`/api/chunks/${source.chunk_id}?context_size=0`);
         if (response.ok) {
           const data = await response.json();
           setChunkContext(data);

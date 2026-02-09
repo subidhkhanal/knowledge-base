@@ -16,7 +16,6 @@ class QueryEngine:
     def _retrieve_and_rerank(
         self,
         question: str,
-        user_id: str,
         top_k: int,
         threshold: float,
         source_filter: Optional[str],
@@ -28,7 +27,6 @@ class QueryEngine:
 
         chunks = self.vector_store.search(
             query=question,
-            user_id=user_id,
             top_k=retrieve_k,
             threshold=threshold,
             source_filter=source_filter
@@ -66,7 +64,6 @@ class QueryEngine:
     def retrieve(
         self,
         question: str,
-        user_id: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None,
@@ -74,24 +71,22 @@ class QueryEngine:
     ) -> tuple[List[Dict[str, Any]], bool]:
         """Retrieve and rerank chunks without LLM generation (for streaming)."""
         return self._retrieve_and_rerank(
-            question, user_id, top_k, threshold, source_filter, use_reranking
+            question, top_k, threshold, source_filter, use_reranking
         )
 
     async def query(
         self,
         question: str,
-        user_id: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None,
         use_reranking: bool = USE_RERANKING
     ) -> Dict[str, Any]:
         """
-        Process a query through the RAG pipeline for a specific user.
+        Process a query through the RAG pipeline.
 
         Args:
             question: User's question
-            user_id: The user's unique identifier
             top_k: Number of chunks to retrieve
             threshold: Minimum similarity threshold
             source_filter: Optional filter by source name
@@ -101,7 +96,7 @@ class QueryEngine:
             Dict with 'answer', 'sources', 'chunks_used', and 'provider'
         """
         chunks, reranked = self._retrieve_and_rerank(
-            question, user_id, top_k, threshold, source_filter, use_reranking
+            question, top_k, threshold, source_filter, use_reranking
         )
 
         result = await self.llm.generate_response(query=question, chunks=chunks)
@@ -111,15 +106,14 @@ class QueryEngine:
     def query_sync(
         self,
         question: str,
-        user_id: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
         source_filter: Optional[str] = None,
         use_reranking: bool = USE_RERANKING
     ) -> Dict[str, Any]:
-        """Synchronous version of query for a specific user."""
+        """Synchronous version of query."""
         chunks, reranked = self._retrieve_and_rerank(
-            question, user_id, top_k, threshold, source_filter, use_reranking
+            question, top_k, threshold, source_filter, use_reranking
         )
 
         result = self.llm.generate_response_sync(query=question, chunks=chunks)

@@ -26,7 +26,8 @@
       "Bash(dir \"c:\\\\personal-assistant\")",
       "Bash(dir:*)",
       "Bash(python -m uvicorn:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(del \"c:\\\\personal-assistant\\\\frontend\\\\src\\\\hooks\\\\useAuthFetch.ts\")"
     ]
   }
 }

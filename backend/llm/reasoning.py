@@ -1,23 +1,18 @@
 from typing import List, Dict, Any, Optional, AsyncGenerator
-import httpx
 from groq import Groq
 from backend.config import (
-    OLLAMA_BASE_URL, OLLAMA_MODEL,
     GROQ_API_KEY, GROQ_MODEL,
-    USE_OLLAMA_FALLBACK, SYSTEM_PROMPT,
-    LLM_MAX_TOKENS, LLM_TEMPERATURE, LLM_TIMEOUT
+    SYSTEM_PROMPT,
+    LLM_MAX_TOKENS, LLM_TEMPERATURE
 )
 
 
 class LLMReasoning:
-    """LLM integration for RAG responses using Groq (primary, free cloud) and Ollama (optional local fallback)."""
+    """LLM integration for RAG responses using Groq."""
 
     def __init__(self):
         self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
         self.groq_model = GROQ_MODEL
-        self.ollama_url = OLLAMA_BASE_URL
-        self.ollama_model = OLLAMA_MODEL
-        self.use_ollama_fallback = USE_OLLAMA_FALLBACK
 
     def _format_context(self, chunks: List[Dict[str, Any]]) -> str:
         """Format retrieved chunks into context string."""
@@ -77,7 +72,7 @@ Answer the question based on the context above. Do NOT include source citations 
         }
 
     def _call_groq(self, prompt: str) -> Optional[str]:
-        """Call Groq API (primary - free cloud)."""
+        """Call Groq API."""
         if not self.groq_client:
             return None
 
@@ -142,42 +137,6 @@ Answer the question based on the context above. Do NOT include source citations 
             "provider": "groq"
         }
 
-    async def _call_ollama(self, prompt: str) -> Optional[str]:
-        """Call Ollama API (optional local fallback)."""
-        try:
-            async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
-                response = await client.post(
-                    f"{self.ollama_url}/api/generate",
-                    json={
-                        "model": self.ollama_model,
-                        "prompt": prompt,
-                        "system": SYSTEM_PROMPT,
-                        "stream": False
-                    }
-                )
-                response.raise_for_status()
-                return response.json().get("response", "")
-        except Exception:
-            return None
-
-    def _call_ollama_sync(self, prompt: str) -> Optional[str]:
-        """Call Ollama API synchronously."""
-        try:
-            with httpx.Client(timeout=LLM_TIMEOUT) as client:
-                response = client.post(
-                    f"{self.ollama_url}/api/generate",
-                    json={
-                        "model": self.ollama_model,
-                        "prompt": prompt,
-                        "system": SYSTEM_PROMPT,
-                        "stream": False
-                    }
-                )
-                response.raise_for_status()
-                return response.json().get("response", "")
-        except Exception:
-            return None
-
     async def generate_response(
         self,
         query: str,
@@ -199,14 +158,7 @@ Answer the question based on the context above. Do NOT include source citations 
         context = self._format_context(chunks)
         prompt = self._build_prompt(query, context)
 
-        # Try Groq first (primary - free cloud)
         response = self._call_groq(prompt)
-        provider = "groq"
-
-        # Fallback to Ollama if Groq fails and fallback is enabled
-        if response is None and self.use_ollama_fallback:
-            response = await self._call_ollama(prompt)
-            provider = "ollama"
 
         if response is None:
             return self._error_response()
@@ -214,7 +166,7 @@ Answer the question based on the context above. Do NOT include source citations 
         return {
             "answer": response,
             "sources": self._extract_sources(chunks),
-            "provider": provider
+            "provider": "groq"
         }
 
     def generate_response_sync(
@@ -229,14 +181,7 @@ Answer the question based on the context above. Do NOT include source citations 
         context = self._format_context(chunks)
         prompt = self._build_prompt(query, context)
 
-        # Try Groq first (primary - free cloud)
         response = self._call_groq(prompt)
-        provider = "groq"
-
-        # Fallback to Ollama if Groq fails and fallback is enabled
-        if response is None and self.use_ollama_fallback:
-            response = self._call_ollama_sync(prompt)
-            provider = "ollama"
 
         if response is None:
             return self._error_response()
@@ -244,5 +189,5 @@ Answer the question based on the context above. Do NOT include source citations 
         return {
             "answer": response,
             "sources": self._extract_sources(chunks),
-            "provider": provider
+            "provider": "groq"
         }

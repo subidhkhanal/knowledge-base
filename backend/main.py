@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -15,7 +15,6 @@ from backend.ingestion import (
 )
 from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
-from backend.auth import get_current_user
 from backend.config import MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING
 from backend.routing import QueryRouter, RouteHandlers
 
@@ -182,9 +181,8 @@ SUPPORTED_EXTENSIONS = {
 @app.post("/api/upload/document", response_model=UploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
 ):
-    """Upload and process any supported document type for the authenticated user."""
+    """Upload and process any supported document type."""
     filename = file.filename.lower()
     ext = "." + filename.split(".")[-1] if "." in filename else ""
 
@@ -195,7 +193,6 @@ async def upload_document(
         )
 
     processor_type = SUPPORTED_EXTENSIONS[ext]
-    user_id = current_user["user_id"]
     components = get_components()
     content = await file.read()
 
@@ -243,9 +240,9 @@ async def upload_document(
             detail=f"Text from '{file.filename}' is too short (minimum ~100 words needed for meaningful search)."
         )
 
-    # Store in vector database with user_id
+    # Store in vector database
     try:
-        components["vector_store"].add_documents(chunks, user_id=user_id)
+        components["vector_store"].add_documents(chunks)
     except Exception as e:
         error_msg = str(e).lower()
         if "api" in error_msg or "key" in error_msg or "unauthorized" in error_msg:
@@ -268,9 +265,8 @@ async def upload_document(
 @app.post("/api/upload/text", response_model=UploadResponse)
 async def upload_text(
     request: TextUploadRequest,
-    current_user: dict = Depends(get_current_user)
 ):
-    """Upload direct text content for the authenticated user."""
+    """Upload direct text content."""
     if not request.content.strip():
         raise HTTPException(status_code=400, detail="Content cannot be empty")
 
@@ -281,7 +277,6 @@ async def upload_text(
             detail=f"Content too large. Maximum size is {MAX_UPLOAD_SIZE_MB} MB."
         )
 
-    user_id = current_user["user_id"]
     components = get_components()
 
     # Process text
@@ -302,9 +297,9 @@ async def upload_text(
             detail="Text is too short (minimum ~100 words needed for meaningful search)."
         )
 
-    # Store in vector database with user_id
+    # Store in vector database
     try:
-        components["vector_store"].add_documents(chunks, user_id=user_id)
+        components["vector_store"].add_documents(chunks)
     except Exception as e:
         error_msg = str(e).lower()
         if "api" in error_msg or "key" in error_msg or "unauthorized" in error_msg:
@@ -327,13 +322,11 @@ async def upload_text(
 @app.post("/api/query")
 async def query(
     request: QueryRequest,
-    current_user: dict = Depends(get_current_user)
 ):
     """Query the knowledge base with streaming SSE response."""
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    user_id = current_user["user_id"]
     components = get_components()
 
     async def event_stream():
@@ -350,7 +343,6 @@ async def query(
             async for event in components["route_handlers"].handle_stream(
                 route_type=route_result.route_type,
                 query=request.question,
-                user_id=user_id,
                 top_k=request.top_k,
                 threshold=request.threshold,
                 source_filter=request.source_filter,
@@ -362,7 +354,6 @@ async def query(
             qe = components["query_engine"]
             chunks, reranked = qe.retrieve(
                 question=request.question,
-                user_id=user_id,
                 top_k=request.top_k,
                 threshold=request.threshold,
                 source_filter=request.source_filter
@@ -384,23 +375,20 @@ async def query(
 
 
 @app.get("/api/sources", response_model=List[SourceResponse])
-async def get_sources(current_user: dict = Depends(get_current_user)):
-    """Get all ingested sources for the authenticated user."""
-    user_id = current_user["user_id"]
+async def get_sources():
+    """Get all ingested sources."""
     components = get_components()
-    sources = components["vector_store"].get_all_sources(user_id=user_id)
+    sources = components["vector_store"].get_all_sources()
     return [SourceResponse(**s) for s in sources]
 
 
 @app.get("/api/sources/{source_name}/content")
 async def get_source_content(
     source_name: str,
-    current_user: dict = Depends(get_current_user)
 ):
     """Get all chunks/content for a specific source document."""
-    user_id = current_user["user_id"]
     components = get_components()
-    chunks = components["vector_store"].get_chunks_by_source(source_name, user_id=user_id)
+    chunks = components["vector_store"].get_chunks_by_source(source_name)
 
     if not chunks:
         raise HTTPException(status_code=404, detail=f"Source '{source_name}' not found")
@@ -415,12 +403,10 @@ async def get_source_content(
 @app.delete("/api/sources/{source_name}")
 async def delete_source(
     source_name: str,
-    current_user: dict = Depends(get_current_user)
 ):
-    """Delete all documents from a specific source for the authenticated user."""
-    user_id = current_user["user_id"]
+    """Delete all documents from a specific source."""
     components = get_components()
-    deleted = components["vector_store"].delete_by_source(source_name, user_id=user_id)
+    deleted = components["vector_store"].delete_by_source(source_name)
 
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Source '{source_name}' not found")
@@ -436,14 +422,11 @@ async def delete_source(
 async def get_chunk_context(
     chunk_id: str,
     context_size: int = 1,
-    current_user: dict = Depends(get_current_user)
 ):
-    """Get a specific chunk with surrounding context for the authenticated user."""
-    user_id = current_user["user_id"]
+    """Get a specific chunk with surrounding context."""
     components = get_components()
     result = components["vector_store"].get_chunk_with_context(
         chunk_id=chunk_id,
-        user_id=user_id,
         context_size=context_size
     )
 
@@ -454,12 +437,11 @@ async def get_chunk_context(
 
 
 @app.get("/api/stats")
-async def get_stats(current_user: dict = Depends(get_current_user)):
-    """Get knowledge base statistics for the authenticated user."""
-    user_id = current_user["user_id"]
+async def get_stats():
+    """Get knowledge base statistics."""
     components = get_components()
-    sources = components["vector_store"].get_all_sources(user_id=user_id)
-    total_chunks = components["vector_store"].count(user_id=user_id)
+    sources = components["vector_store"].get_all_sources()
+    total_chunks = components["vector_store"].count()
 
     return {
         "total_sources": len(sources),

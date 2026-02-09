@@ -76,7 +76,6 @@ class RouteHandlers:
     async def handle_knowledge(
         self,
         query: str,
-        user_id: str,
         top_k: int = 5,
         threshold: float = 0.3,
         source_filter: Optional[str] = None
@@ -91,7 +90,6 @@ class RouteHandlers:
 
         result = await self.query_engine.query(
             question=query,
-            user_id=user_id,
             top_k=top_k,
             threshold=threshold,
             source_filter=source_filter
@@ -101,7 +99,7 @@ class RouteHandlers:
         result["route_type"] = RouteType.KNOWLEDGE.value
         return result
 
-    async def handle_meta(self, query: str, user_id: str) -> Dict[str, Any]:
+    async def handle_meta(self, query: str) -> Dict[str, Any]:
         """
         Handle META queries about the system/documents.
 
@@ -110,8 +108,7 @@ class RouteHandlers:
         if not self.vector_store:
             return self._error_response("Vector store not available")
 
-        # Get list of user's documents
-        sources = self.vector_store.get_all_sources(user_id=user_id)
+        sources = self.vector_store.get_all_sources()
 
         if not sources:
             answer = (
@@ -223,7 +220,6 @@ If the user seems to want help, mention that you can answer questions about thei
     async def handle_summary(
         self,
         query: str,
-        user_id: str,
         top_k: int = 10,
         threshold: float = 0.25,
         source_filter: Optional[str] = None
@@ -239,7 +235,6 @@ If the user seems to want help, mention that you can answer questions about thei
         # Get more chunks for comprehensive summary
         result = await self.query_engine.query(
             question=query,
-            user_id=user_id,
             top_k=top_k,
             threshold=threshold,
             source_filter=source_filter
@@ -274,7 +269,6 @@ Be comprehensive but concise. Focus on the most important information."""
     async def handle_comparison(
         self,
         query: str,
-        user_id: str,
         top_k: int = 10,
         threshold: float = 0.25,
         source_filter: Optional[str] = None
@@ -290,7 +284,6 @@ Be comprehensive but concise. Focus on the most important information."""
         # Get more chunks to find information about both items being compared
         result = await self.query_engine.query(
             question=query,
-            user_id=user_id,
             top_k=top_k,
             threshold=threshold,
             source_filter=source_filter
@@ -327,7 +320,6 @@ and what couldn't be found."""
     async def handle_follow_up(
         self,
         query: str,
-        user_id: str,
         top_k: int = 5,
         threshold: float = 0.3,
         source_filter: Optional[str] = None
@@ -345,7 +337,6 @@ and what couldn't be found."""
         # TODO: Accept conversation history parameter for better context
         result = await self.query_engine.query(
             question=query,
-            user_id=user_id,
             top_k=top_k,
             threshold=threshold,
             source_filter=source_filter
@@ -378,7 +369,6 @@ and what couldn't be found."""
         self,
         route_type: RouteType,
         query: str,
-        user_id: str,
         top_k: int = 5,
         threshold: float = 0.3,
         source_filter: Optional[str] = None,
@@ -390,7 +380,6 @@ and what couldn't be found."""
         Args:
             route_type: The classified route type
             query: User's original query
-            user_id: User's ID
             top_k: Number of chunks for KNOWLEDGE queries
             threshold: Similarity threshold for KNOWLEDGE queries
             source_filter: Optional source filter for KNOWLEDGE queries
@@ -404,10 +393,10 @@ and what couldn't be found."""
 
         if route_type == RouteType.KNOWLEDGE:
             return await self.handle_knowledge(
-                effective_query, user_id, top_k, threshold, source_filter
+                effective_query, top_k, threshold, source_filter
             )
         elif route_type == RouteType.META:
-            return await self.handle_meta(query, user_id)
+            return await self.handle_meta(query)
         elif route_type == RouteType.GREETING:
             return await self.handle_greeting(query)
         elif route_type == RouteType.CLARIFICATION:
@@ -416,26 +405,25 @@ and what couldn't be found."""
             return await self.handle_out_of_scope(query)
         elif route_type == RouteType.SUMMARY:
             return await self.handle_summary(
-                effective_query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
+                effective_query, top_k=10, threshold=0.25, source_filter=source_filter
             )
         elif route_type == RouteType.COMPARISON:
             return await self.handle_comparison(
-                effective_query, user_id, top_k=10, threshold=0.25, source_filter=source_filter
+                effective_query, top_k=10, threshold=0.25, source_filter=source_filter
             )
         elif route_type == RouteType.FOLLOW_UP:
             return await self.handle_follow_up(
-                effective_query, user_id, top_k, threshold, source_filter
+                effective_query, top_k, threshold, source_filter
             )
         else:
             return await self.handle_knowledge(
-                effective_query, user_id, top_k, threshold, source_filter
+                effective_query, top_k, threshold, source_filter
             )
 
     async def handle_stream(
         self,
         route_type: RouteType,
         query: str,
-        user_id: str,
         top_k: int = 5,
         threshold: float = 0.3,
         source_filter: Optional[str] = None,
@@ -447,7 +435,7 @@ and what couldn't be found."""
         # Non-streaming routes: send full answer at once
         if route_type in (RouteType.META, RouteType.CLARIFICATION, RouteType.OUT_OF_SCOPE):
             result = await self.handle(
-                route_type, query, user_id, top_k, threshold, source_filter, rewritten_query
+                route_type, query, top_k, threshold, source_filter, rewritten_query
             )
             yield {"type": "token", "content": result["answer"]}
             yield {
@@ -495,7 +483,6 @@ If the user seems to want help, mention that you can answer questions about thei
 
         chunks, reranked = self.query_engine.retrieve(
             question=effective_query,
-            user_id=user_id,
             top_k=retrieve_top_k,
             threshold=retrieve_threshold,
             source_filter=source_filter

@@ -44,15 +44,10 @@ USE_RERANKING = os.getenv("USE_RERANKING", "true").lower() == "true"
 RERANK_MODEL = os.getenv("RERANK_MODEL", "rerank-english-v3.0")
 RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))  # Final number of results after reranking
 
-# LLM settings - Groq is PRIMARY (free cloud API)
+# LLM settings - Groq (free cloud API)
 # Get your free API key at https://console.groq.com
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
-
-# Ollama is optional local fallback
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
-USE_OLLAMA_FALLBACK = os.getenv("USE_OLLAMA_FALLBACK", "false").lower() == "true"
 
 # LLM generation settings
 LLM_MAX_TOKENS = 2048  # Max response tokens

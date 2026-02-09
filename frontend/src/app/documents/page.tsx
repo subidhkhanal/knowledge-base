@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useAuthFetch } from "@/hooks/useAuthFetch";
+import { useApi } from "@/hooks/useApi";
 
 interface Source {
   source: string;
@@ -17,7 +17,7 @@ interface Stats {
 }
 
 function DocumentsContent() {
-  const { authFetch } = useAuthFetch();
+  const { apiFetch } = useApi();
   const [documents, setDocuments] = useState<Source[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,8 +30,8 @@ function DocumentsContent() {
 
     try {
       const [documentsRes, statsRes] = await Promise.all([
-        authFetch("/api/sources"),
-        authFetch("/api/stats"),
+        apiFetch("/api/sources"),
+        apiFetch("/api/stats"),
       ]);
 
       if (documentsRes.ok) {
@@ -48,7 +48,7 @@ function DocumentsContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch]);
+  }, [apiFetch]);
 
   useEffect(() => {
     fetchData();
@@ -60,7 +60,7 @@ function DocumentsContent() {
     setDeletingDocument(documentName);
 
     try {
-      const response = await authFetch(
+      const response = await apiFetch(
         `/api/sources/${encodeURIComponent(documentName)}`,
         { method: "DELETE" }
       );
