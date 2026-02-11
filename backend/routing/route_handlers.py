@@ -237,13 +237,14 @@ If the user seems to want help, mention that you can answer questions about thei
 
         # If we got chunks, enhance the response with summary-specific prompt
         if result.get("chunks_used", 0) > 0 and self.groq_client:
-            system_prompt = """You are a summarization assistant. Based on the provided context,
-create a clear and concise summary. Structure your response with:
-- A brief overview (1-2 sentences)
-- Key points as bullet points
-- Any important conclusions or takeaways
+            system_prompt = """You are a summarization assistant for a personal document library. Based on the provided context passages, create a clear and structured summary.
 
-Be comprehensive but concise. Focus on the most important information."""
+Rules:
+1. Structure your response with: a brief overview (1-2 sentences), key points as bullet points, and important conclusions or takeaways.
+2. Synthesize information across passages naturally - don't just list what each passage says.
+3. If the context only covers part of the topic, note what's covered and what might be missing.
+4. Never fabricate information not present in the context.
+5. Do NOT include source citations - sources are displayed separately."""
 
             chunks_text = "\n\n".join([
                 f"[From: {src.get('source', 'Unknown')}]\n{src.get('text', '')}"
@@ -286,15 +287,14 @@ Be comprehensive but concise. Focus on the most important information."""
 
         # If we got chunks, enhance with comparison-specific prompt
         if result.get("chunks_used", 0) > 0 and self.groq_client:
-            system_prompt = """You are a comparison assistant. Based on the provided context,
-create a clear comparison. Structure your response with:
-- Brief introduction of items being compared
-- Similarities (if any)
-- Key differences (as a structured list or table format)
-- Summary/conclusion
+            system_prompt = """You are a comparison assistant for a personal document library. Based on the provided context passages, create a clear and structured comparison.
 
-If information about one or more items is missing from the context, note what's available
-and what couldn't be found."""
+Rules:
+1. Structure your response with: brief introduction, similarities, key differences (as a structured list), and a summary.
+2. Synthesize information across passages naturally.
+3. If information about one or more items is missing from the context, clearly note what's available and what couldn't be found.
+4. Never fabricate information not present in the context.
+5. Do NOT include source citations - sources are displayed separately."""
 
             chunks_text = "\n\n".join([
                 f"[From: {src.get('source', 'Unknown')}]\n{src.get('text', '')}"
@@ -511,24 +511,24 @@ If the user seems to want help, mention that you can answer questions about thei
         ])
 
         if route_type == RouteType.SUMMARY:
-            system_prompt = """You are a summarization assistant. Based on the provided context,
-create a clear and concise summary. Structure your response with:
-- A brief overview (1-2 sentences)
-- Key points as bullet points
-- Any important conclusions or takeaways
+            system_prompt = """You are a summarization assistant for a personal document library. Based on the provided context passages, create a clear and structured summary.
 
-Be comprehensive but concise. Focus on the most important information."""
+Rules:
+1. Structure your response with: a brief overview (1-2 sentences), key points as bullet points, and important conclusions or takeaways.
+2. Synthesize information across passages naturally - don't just list what each passage says.
+3. If the context only covers part of the topic, note what's covered and what might be missing.
+4. Never fabricate information not present in the context.
+5. Do NOT include source citations - sources are displayed separately."""
             user_message = f"Please summarize the following content:\n\n{chunks_text}\n\nOriginal request: {effective_query}"
         elif route_type == RouteType.COMPARISON:
-            system_prompt = """You are a comparison assistant. Based on the provided context,
-create a clear comparison. Structure your response with:
-- Brief introduction of items being compared
-- Similarities (if any)
-- Key differences (as a structured list or table format)
-- Summary/conclusion
+            system_prompt = """You are a comparison assistant for a personal document library. Based on the provided context passages, create a clear and structured comparison.
 
-If information about one or more items is missing from the context, note what's available
-and what couldn't be found."""
+Rules:
+1. Structure your response with: brief introduction, similarities, key differences (as a structured list), and a summary.
+2. Synthesize information across passages naturally.
+3. If information about one or more items is missing from the context, clearly note what's available and what couldn't be found.
+4. Never fabricate information not present in the context.
+5. Do NOT include source citations - sources are displayed separately."""
             user_message = f"Please compare based on the following content:\n\n{chunks_text}\n\nComparison request: {effective_query}"
         else:
             # KNOWLEDGE / FOLLOW_UP: standard RAG prompt

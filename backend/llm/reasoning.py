@@ -22,10 +22,14 @@ class LLMReasoning:
             metadata = chunk.get("metadata", {})
             source = metadata.get("source", "Unknown")
             page = metadata.get("page")
+            chunk_index = metadata.get("chunk_index")
+            total_chunks = metadata.get("total_chunks")
 
-            header = f"[Source: {source}"
+            header = f"[Passage {i} | Source: {source}"
             if page:
                 header += f", Page {page}"
+            if chunk_index is not None and total_chunks:
+                header += f" | Part {chunk_index + 1}/{total_chunks}"
             header += "]"
 
             context_parts.append(f"{header}\n{chunk['text']}")
