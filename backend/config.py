@@ -43,7 +43,7 @@ RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))  # Final number of results af
 # LLM settings - Groq (free cloud API)
 # Get your free API key at https://console.groq.com
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # LLM generation settings
 LLM_MAX_TOKENS = 2048  # Max response tokens
