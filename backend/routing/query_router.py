@@ -1,21 +1,20 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict
 from enum import Enum
 import re
-from groq import Groq
-from backend.config import GROQ_API_KEY, GROQ_MODEL
+from backend.config import GROQ_API_KEY, GROQ_MODEL, ROUTER_TEMPERATURE
 
 
 class RouteType(str, Enum):
     """Types of query routes."""
-    KNOWLEDGE = "KNOWLEDGE"      # Questions about document content
-    META = "META"                # Questions about the system/documents
-    GREETING = "GREETING"        # Greetings, small talk
-    CLARIFICATION = "CLARIFICATION"  # Vague/unclear queries
-    OUT_OF_SCOPE = "OUT_OF_SCOPE"    # Requests outside capabilities
-    SUMMARY = "SUMMARY"          # Summarize a document or topic
-    COMPARISON = "COMPARISON"    # Compare two or more things
-    FOLLOW_UP = "FOLLOW_UP"      # Follow-up on previous conversation
+    KNOWLEDGE = "KNOWLEDGE"
+    META = "META"
+    GREETING = "GREETING"
+    CLARIFICATION = "CLARIFICATION"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    SUMMARY = "SUMMARY"
+    COMPARISON = "COMPARISON"
+    FOLLOW_UP = "FOLLOW_UP"
 
 
 # Keyword patterns for fast pre-filtering (avoids LLM call)
@@ -55,6 +54,13 @@ CLARIFICATION_PATTERNS = [
     r"^(what|huh|hmm)[\s!?.]*$",
 ]
 
+# Coreference detection patterns for rewrite optimization
+PRONOUN_PATTERNS = [
+    r'\b(it|its|this|that|these|those|they|them|their|he|she|him|her|his)\b',
+    r'\b(the document|the file|the book|the article|the text)\b',
+    r'\b(above|previous|earlier|last|before|mentioned)\b',
+]
+
 
 @dataclass
 class RouteResult:
@@ -65,18 +71,22 @@ class RouteResult:
     rewritten_query: Optional[str] = None
 
 
-REWRITE_PROMPT = """Given this conversation history and the user's latest query, rewrite the query to be self-contained by:
-1. Resolving any references like "that", "it", "this document", "the file", etc.
-2. Fixing any spelling mistakes or typos
+REWRITE_PROMPT = """You are a coreference resolution system. Given conversation history and a follow-up query, rewrite the query to be fully self-contained.
 
-If the query is already self-contained and has no typos, return it as-is. Do NOT add extra information or change the intent.
+Rules:
+1. Replace ALL pronouns (it, they, that, this, etc.) with their actual referents from the conversation
+2. Replace vague references ("the document", "the book", "the concept") with specific names
+3. If the query references "more about X" or "explain further", include what X refers to
+4. Keep the rewritten query concise and natural
+5. If the query is already self-contained, return it unchanged
+6. Do NOT add information that wasn't in the conversation
 
 Chat History:
 {history}
 
 Latest Query: "{query}"
 
-Rewritten Query:"""
+Rewritten Query (self-contained, no pronouns or vague references):"""
 
 
 CLASSIFY_AND_CORRECT_PROMPT = """You are a query classifier for a personal knowledge base assistant.
@@ -127,19 +137,59 @@ User Query: "{query}"
 Respond with ONLY the category name, nothing else."""
 
 
+# LangChain LCEL chain initialization (lazy)
+_classify_chain = None
+_rewrite_chain = None
+_llm = None
+
+
+def _get_chains():
+    """Lazy-initialize LangChain LCEL chains."""
+    global _classify_chain, _rewrite_chain, _llm
+
+    if _classify_chain is not None:
+        return _classify_chain, _rewrite_chain
+
+    if not GROQ_API_KEY:
+        return None, None
+
+    from langchain_groq import ChatGroq
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
+
+    _llm = ChatGroq(
+        api_key=GROQ_API_KEY,
+        model_name=GROQ_MODEL,
+        temperature=ROUTER_TEMPERATURE,
+        max_tokens=150,
+    )
+
+    # Classification chain: prompt -> LLM -> parse string output
+    classify_prompt = ChatPromptTemplate.from_messages([
+        ("user", CLASSIFY_AND_CORRECT_PROMPT)
+    ])
+    _classify_chain = classify_prompt | _llm | StrOutputParser()
+
+    # Rewrite chain: prompt -> LLM -> parse string output
+    rewrite_prompt = ChatPromptTemplate.from_messages([
+        ("user", REWRITE_PROMPT)
+    ])
+    _rewrite_chain = rewrite_prompt | _llm | StrOutputParser()
+
+    return _classify_chain, _rewrite_chain
+
+
 class QueryRouter:
-    """Routes queries to appropriate handlers using LLM classification."""
+    """Routes queries to appropriate handlers using LangChain LCEL classification."""
 
     def __init__(self):
-        self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-        self.model = GROQ_MODEL
-
         # Compile regex patterns for faster matching
         self._greeting_re = [re.compile(p, re.IGNORECASE) for p in GREETING_PATTERNS]
         self._meta_re = [re.compile(p, re.IGNORECASE) for p in META_PATTERNS]
         self._summary_re = [re.compile(p, re.IGNORECASE) for p in SUMMARY_PATTERNS]
         self._comparison_re = [re.compile(p, re.IGNORECASE) for p in COMPARISON_PATTERNS]
         self._clarification_re = [re.compile(p, re.IGNORECASE) for p in CLARIFICATION_PATTERNS]
+        self._pronoun_re = [re.compile(p, re.IGNORECASE) for p in PRONOUN_PATTERNS]
 
     def _keyword_prefilter(self, query: str) -> Optional[Tuple[RouteType, str]]:
         """
@@ -148,27 +198,22 @@ class QueryRouter:
         """
         query_clean = query.strip()
 
-        # Check greeting patterns
         for pattern in self._greeting_re:
             if pattern.search(query_clean):
                 return (RouteType.GREETING, "Keyword match: greeting pattern")
 
-        # Check meta patterns
         for pattern in self._meta_re:
             if pattern.search(query_clean):
                 return (RouteType.META, "Keyword match: meta/system query")
 
-        # Check summary patterns
         for pattern in self._summary_re:
             if pattern.search(query_clean):
                 return (RouteType.SUMMARY, "Keyword match: summary request")
 
-        # Check comparison patterns
         for pattern in self._comparison_re:
             if pattern.search(query_clean):
                 return (RouteType.COMPARISON, "Keyword match: comparison request")
 
-        # Check clarification patterns (very short/vague queries)
         if len(query_clean.split()) <= 2:
             for pattern in self._clarification_re:
                 if pattern.search(query_clean):
@@ -176,94 +221,38 @@ class QueryRouter:
 
         return None
 
+    def _needs_rewrite(self, query: str) -> bool:
+        """Check if query contains references that need coreference resolution."""
+        for pattern in self._pronoun_re:
+            if pattern.search(query):
+                return True
+        return False
+
     def _format_history(self, chat_history: List[Dict[str, str]]) -> str:
         """Format chat history into a readable string."""
         lines = []
         for msg in chat_history:
             role = msg.get("role", "user").capitalize()
             content = msg.get("content", "")
-            # Truncate long messages to save tokens
             if len(content) > 500:
                 content = content[:500] + "..."
             lines.append(f"{role}: {content}")
         return "\n".join(lines)
 
-    def _rewrite_query(self, query: str, chat_history: List[Dict[str, str]]) -> Optional[str]:
-        """
-        Rewrite a query using chat history to resolve references.
-        Returns the rewritten query, or None if rewrite fails.
-        """
-        if not self.groq_client or not chat_history:
-            return None
-
-        history_str = self._format_history(chat_history)
-        prompt = REWRITE_PROMPT.format(history=history_str, query=query)
-
-        try:
-            response = self.groq_client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=150
-            )
-            rewritten = response.choices[0].message.content.strip()
-            # Only use rewrite if it's meaningfully different
-            if rewritten and rewritten.lower() != query.lower():
-                return rewritten
-            return None
-        except Exception:
-            return None
-
-    def _classify_and_correct(self, query: str) -> Tuple[RouteType, Optional[str]]:
-        """
-        Classify query AND fix typos in a single LLM call.
-        Returns (route_type, corrected_query_or_None).
-        """
-        if not self.groq_client:
-            return (RouteType.KNOWLEDGE, None)
-
-        prompt = CLASSIFY_AND_CORRECT_PROMPT.format(query=query)
-
-        try:
-            response = self.groq_client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=150
-            )
-            raw = response.choices[0].message.content.strip()
-
-            # Parse "CATEGORY | corrected query" format
-            if "|" in raw:
-                parts = raw.split("|", 1)
-                category = parts[0].strip().upper()
-                corrected = parts[1].strip()
-                # Strip wrapping quotes if present
-                corrected = corrected.strip('"\'')
-            else:
-                # Fallback: treat entire response as category
-                category = raw.upper()
-                corrected = None
-
+    def _parse_classify_output(self, raw: str) -> Tuple[RouteType, Optional[str]]:
+        """Parse 'CATEGORY | corrected query' into (RouteType, Optional[str])."""
+        if "|" in raw:
+            parts = raw.split("|", 1)
+            category = parts[0].strip().upper()
+            corrected = parts[1].strip().strip('"\'')
             route_type = self._parse_response(category)
-
-            # Only return corrected query if it's meaningfully different
-            if corrected and corrected.lower() != query.lower():
-                return (route_type, corrected)
-            return (route_type, None)
-
-        except Exception:
-            return (RouteType.KNOWLEDGE, None)
-
-    def _build_prompt(self, query: str) -> str:
-        """Build the classification prompt."""
-        return CLASSIFICATION_PROMPT.format(query=query)
+            return (route_type, corrected if corrected else None)
+        return (self._parse_response(raw.strip().upper()), None)
 
     def _parse_response(self, response: str) -> RouteType:
         """Parse the LLM response into a RouteType."""
         response = response.strip().upper()
 
-        # Map response to RouteType
         route_map = {
             "KNOWLEDGE": RouteType.KNOWLEDGE,
             "META": RouteType.META,
@@ -275,31 +264,21 @@ class QueryRouter:
             "FOLLOW_UP": RouteType.FOLLOW_UP,
         }
 
-        # Try exact match first
         if response in route_map:
             return route_map[response]
 
-        # Try partial match (in case LLM adds extra text)
         for key, route_type in route_map.items():
             if key in response:
                 return route_type
 
-        # Default to KNOWLEDGE if unclear
         return RouteType.KNOWLEDGE
 
     async def classify(self, query: str, chat_history: Optional[List[Dict[str, str]]] = None) -> RouteResult:
         """
-        Classify a query into a route type.
+        Classify a query into a route type using LangChain LCEL chains.
 
-        Uses keyword pre-filter first for speed, falls back to LLM for complex cases.
+        Uses keyword pre-filter first for speed, falls back to LangChain LCEL for complex cases.
         When chat_history is provided, rewrites referential queries before classification.
-
-        Args:
-            query: The user's query string
-            chat_history: Optional list of previous messages for context
-
-        Returns:
-            RouteResult with the classified route type and optional rewritten_query
         """
         # Try fast keyword pre-filter first
         prefilter_result = self._keyword_prefilter(query)
@@ -311,61 +290,78 @@ class QueryRouter:
                 reasoning=reasoning
             )
 
-        # No chat history: single LLM call for classify + correct
-        if not chat_history:
-            route_type, corrected = self._classify_and_correct(query)
-            return RouteResult(
-                route_type=route_type,
-                confidence=1.0 if self.groq_client else 0.5,
-                reasoning="Combined classify+correct",
-                rewritten_query=corrected
-            )
+        classify_chain, rewrite_chain = _get_chains()
 
-        # With chat history: rewrite first (resolves refs + typos), then classify
-        rewritten_query = self._rewrite_query(query, chat_history)
+        # No chat history: single LangChain LCEL call for classify + correct
+        if not chat_history:
+            if not classify_chain:
+                return RouteResult(route_type=RouteType.KNOWLEDGE, confidence=0.5, reasoning="No LLM available")
+
+            try:
+                raw = await classify_chain.ainvoke({"query": query})
+                route_type, corrected = self._parse_classify_output(raw)
+                if corrected and corrected.lower() == query.lower():
+                    corrected = None
+                return RouteResult(
+                    route_type=route_type,
+                    confidence=1.0,
+                    reasoning="LangChain LCEL classify+correct",
+                    rewritten_query=corrected
+                )
+            except Exception:
+                return RouteResult(route_type=RouteType.KNOWLEDGE, confidence=0.5, reasoning="Classification error")
+
+        # With chat history: rewrite first (if coreference detected), then classify
+        rewritten_query = None
+        if rewrite_chain and self._needs_rewrite(query):
+            try:
+                history_str = self._format_history(chat_history)
+                rewritten = await rewrite_chain.ainvoke({"history": history_str, "query": query})
+                rewritten = rewritten.strip()
+                if rewritten and rewritten.lower() != query.lower():
+                    rewritten_query = rewritten
+            except Exception:
+                pass
+
         classify_query = rewritten_query or query
 
-        if not self.groq_client:
+        if not classify_chain:
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,
                 confidence=0.5,
-                reasoning="No Groq API key available, defaulting to KNOWLEDGE",
+                reasoning="No LLM available",
                 rewritten_query=rewritten_query
             )
 
-        prompt = self._build_prompt(classify_query)
-
         try:
-            response = self.groq_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=20
-            )
+            # Build a simple classification-only LCEL chain for the rewritten query
+            from langchain_core.prompts import ChatPromptTemplate
+            from langchain_core.output_parsers import StrOutputParser
 
-            llm_response = response.choices[0].message.content
-            route_type = self._parse_response(llm_response)
+            classify_only_prompt = ChatPromptTemplate.from_messages([
+                ("user", CLASSIFICATION_PROMPT)
+            ])
+            classify_only_chain = classify_only_prompt | _llm | StrOutputParser()
+
+            raw = await classify_only_chain.ainvoke({"query": classify_query})
+            route_type = self._parse_response(raw)
 
             return RouteResult(
                 route_type=route_type,
                 confidence=1.0,
-                reasoning=f"LLM classified as: {llm_response}",
+                reasoning="LangChain LCEL rewrite+classify",
                 rewritten_query=rewritten_query
             )
-
-        except Exception as e:
+        except Exception:
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,
                 confidence=0.5,
-                reasoning=f"Classification error: {str(e)}, defaulting to KNOWLEDGE",
+                reasoning="Classification error",
                 rewritten_query=rewritten_query
             )
 
     def classify_sync(self, query: str) -> RouteResult:
         """Synchronous version of classify."""
-        # Try fast keyword pre-filter first
         prefilter_result = self._keyword_prefilter(query)
         if prefilter_result:
             route_type, reasoning = prefilter_result
@@ -375,38 +371,28 @@ class QueryRouter:
                 reasoning=reasoning
             )
 
-        # Fall back to LLM
-        if not self.groq_client:
+        classify_chain, _ = _get_chains()
+        if not classify_chain:
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,
                 confidence=0.5,
-                reasoning="No Groq API key available, defaulting to KNOWLEDGE"
+                reasoning="No LLM available"
             )
-
-        prompt = self._build_prompt(query)
 
         try:
-            response = self.groq_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=20
-            )
-
-            llm_response = response.choices[0].message.content
-            route_type = self._parse_response(llm_response)
-
+            raw = classify_chain.invoke({"query": query})
+            route_type, corrected = self._parse_classify_output(raw)
+            if corrected and corrected.lower() == query.lower():
+                corrected = None
             return RouteResult(
                 route_type=route_type,
                 confidence=1.0,
-                reasoning=f"LLM classified as: {llm_response}"
+                reasoning="LangChain LCEL classify+correct",
+                rewritten_query=corrected
             )
-
-        except Exception as e:
+        except Exception:
             return RouteResult(
                 route_type=RouteType.KNOWLEDGE,
                 confidence=0.5,
-                reasoning=f"Classification error: {str(e)}, defaulting to KNOWLEDGE"
+                reasoning="Classification error"
             )

@@ -13,12 +13,13 @@ Requires:
 """
 
 import json
+import math
 import os
 import sys
 import time
 import argparse
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -80,6 +81,26 @@ def run_rag_pipeline(qe: QueryEngine, question: str) -> Dict[str, Any]:
     }
 
 
+def compute_ndcg_at_k(retrieved_sources: List[str], expected_source: str, k: int = 10) -> Optional[float]:
+    """Compute nDCG@k for a single query using binary relevance."""
+    if not expected_source:
+        return None
+
+    relevances = [
+        1.0 if expected_source.lower() in s.lower() else 0.0
+        for s in retrieved_sources[:k]
+    ]
+
+    # DCG
+    dcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(relevances))
+
+    # Ideal DCG (all relevant docs at top)
+    ideal_relevances = sorted(relevances, reverse=True)
+    idcg = sum(rel / math.log2(i + 2) for i, rel in enumerate(ideal_relevances))
+
+    return dcg / idcg if idcg > 0 else 0.0
+
+
 def compute_retrieval_metrics(
     rag_result: Dict[str, Any],
     test_case: Dict[str, Any],
@@ -106,9 +127,13 @@ def compute_retrieval_metrics(
     # Average similarity score
     avg_sim = sum(similarities) / len(similarities) if similarities else 0
 
+    # nDCG@10
+    ndcg = compute_ndcg_at_k(sources, expected_source, k=10)
+
     return {
         "source_hit": source_hit,
         "precision_at_k": precision,
+        "ndcg_at_10": round(ndcg, 4) if ndcg is not None else None,
         "avg_similarity": round(avg_sim, 4),
         "chunks_used": rag_result["chunks_used"],
         "latency": round(rag_result["latency"], 2),
@@ -134,7 +159,7 @@ def run_ragas_evaluation(
         from google import genai
         from ragas import evaluate
         from ragas.llms import llm_factory
-        from ragas.metrics import Faithfulness, AnswerCorrectness
+        from ragas.metrics import Faithfulness, AnswerCorrectness, ContextPrecision, ContextRecall
     except ImportError as e:
         print(f"\nWARNING: Missing dependency: {e}")
         print("  Run: pip install ragas google-genai datasets")
@@ -154,12 +179,16 @@ def run_ragas_evaluation(
     }
 
     # Metrics that don't need ground truth
-    metrics = [Faithfulness(llm=llm)]
+    metrics = [
+        Faithfulness(llm=llm),
+        ContextPrecision(llm=llm),
+    ]
 
     # Add ground-truth metrics if available
     if has_ground_truth:
         data["ground_truth"] = ground_truths
         metrics.append(AnswerCorrectness(llm=llm))
+        metrics.append(ContextRecall(llm=llm))
 
     dataset = Dataset.from_dict(data)
 
@@ -200,6 +229,9 @@ def print_report(
         if rm["precision_at_k"] is not None:
             print(f"  Precision@{rm['chunks_used']}:    {rm['precision_at_k']:.2f}")
 
+        if rm.get("ndcg_at_10") is not None:
+            print(f"  nDCG@10:         {rm['ndcg_at_10']:.4f}")
+
         print(f"  Avg Similarity:  {rm['avg_similarity']:.4f}")
         print(f"  Chunks Used:     {rm['chunks_used']}")
         print(f"  Latency:         {rm['latency']}s")
@@ -222,6 +254,10 @@ def print_report(
     precisions = [rm["precision_at_k"] for rm in retrieval_metrics if rm["precision_at_k"] is not None]
     if precisions:
         print(f"  Avg Precision@k:    {sum(precisions)/len(precisions):.2f}")
+
+    ndcgs = [rm["ndcg_at_10"] for rm in retrieval_metrics if rm.get("ndcg_at_10") is not None]
+    if ndcgs:
+        print(f"  Avg nDCG@10:        {sum(ndcgs)/len(ndcgs):.4f}")
 
     sims = [rm["avg_similarity"] for rm in retrieval_metrics]
     if sims:

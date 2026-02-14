@@ -78,7 +78,8 @@ class RouteHandlers:
         query: str,
         top_k: int = 5,
         threshold: float = 0.3,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Handle KNOWLEDGE queries using full RAG pipeline.
@@ -92,14 +93,15 @@ class RouteHandlers:
             question=query,
             top_k=top_k,
             threshold=threshold,
-            source_filter=source_filter
+            source_filter=source_filter,
+            user_id=user_id
         )
 
         # Add route_type to response
         result["route_type"] = RouteType.KNOWLEDGE.value
         return result
 
-    async def handle_meta(self, query: str) -> Dict[str, Any]:
+    async def handle_meta(self, query: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Handle META queries about the system/documents.
 
@@ -108,7 +110,7 @@ class RouteHandlers:
         if not self.vector_store:
             return self._error_response("Vector store not available")
 
-        sources = self.vector_store.get_all_sources()
+        sources = self.vector_store.get_all_sources(user_id=user_id)
 
         if not sources:
             answer = (
@@ -217,7 +219,8 @@ If the user seems to want help, mention that you can answer questions about thei
         query: str,
         top_k: int = 10,
         threshold: float = 0.25,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Handle SUMMARY queries - summarize documents or topics.
@@ -232,7 +235,8 @@ If the user seems to want help, mention that you can answer questions about thei
             question=query,
             top_k=top_k,
             threshold=threshold,
-            source_filter=source_filter
+            source_filter=source_filter,
+            user_id=user_id
         )
 
         # If we got chunks, enhance the response with summary-specific prompt
@@ -267,7 +271,8 @@ Rules:
         query: str,
         top_k: int = 10,
         threshold: float = 0.25,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Handle COMPARISON queries - compare two or more things.
@@ -282,7 +287,8 @@ Rules:
             question=query,
             top_k=top_k,
             threshold=threshold,
-            source_filter=source_filter
+            source_filter=source_filter,
+            user_id=user_id
         )
 
         # If we got chunks, enhance with comparison-specific prompt
@@ -317,24 +323,23 @@ Rules:
         query: str,
         top_k: int = 5,
         threshold: float = 0.3,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Handle FOLLOW_UP queries - questions that reference previous context.
 
-        Note: Currently routes to KNOWLEDGE as we don't have conversation history.
-        The frontend should provide context for true follow-up handling.
+        Uses conversation history for coreference resolution when available.
         """
         if not self.query_engine:
             return self._error_response("Query engine not available")
 
-        # For now, treat as knowledge query
-        # TODO: Accept conversation history parameter for better context
         result = await self.query_engine.query(
             question=query,
             top_k=top_k,
             threshold=threshold,
-            source_filter=source_filter
+            source_filter=source_filter,
+            user_id=user_id
         )
 
         # If no results, provide helpful message
@@ -367,7 +372,8 @@ Rules:
         top_k: int = 5,
         threshold: float = 0.3,
         source_filter: Optional[str] = None,
-        rewritten_query: Optional[str] = None
+        rewritten_query: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Route to appropriate handler based on route type.
@@ -379,6 +385,7 @@ Rules:
             threshold: Similarity threshold for KNOWLEDGE queries
             source_filter: Optional source filter for KNOWLEDGE queries
             rewritten_query: Context-resolved query (if references were resolved)
+            user_id: Optional user ID for per-user isolation
 
         Returns:
             Response dict with answer, sources, etc.
@@ -388,10 +395,10 @@ Rules:
 
         if route_type == RouteType.KNOWLEDGE:
             return await self.handle_knowledge(
-                effective_query, top_k, threshold, source_filter
+                effective_query, top_k, threshold, source_filter, user_id=user_id
             )
         elif route_type == RouteType.META:
-            return await self.handle_meta(query)
+            return await self.handle_meta(query, user_id=user_id)
         elif route_type == RouteType.GREETING:
             return await self.handle_greeting(query)
         elif route_type == RouteType.CLARIFICATION:
@@ -400,19 +407,19 @@ Rules:
             return await self.handle_out_of_scope(query)
         elif route_type == RouteType.SUMMARY:
             return await self.handle_summary(
-                effective_query, top_k=10, threshold=0.25, source_filter=source_filter
+                effective_query, top_k=10, threshold=0.25, source_filter=source_filter, user_id=user_id
             )
         elif route_type == RouteType.COMPARISON:
             return await self.handle_comparison(
-                effective_query, top_k=10, threshold=0.25, source_filter=source_filter
+                effective_query, top_k=10, threshold=0.25, source_filter=source_filter, user_id=user_id
             )
         elif route_type == RouteType.FOLLOW_UP:
             return await self.handle_follow_up(
-                effective_query, top_k, threshold, source_filter
+                effective_query, top_k, threshold, source_filter, user_id=user_id
             )
         else:
             return await self.handle_knowledge(
-                effective_query, top_k, threshold, source_filter
+                effective_query, top_k, threshold, source_filter, user_id=user_id
             )
 
     async def handle_stream(
@@ -422,7 +429,8 @@ Rules:
         top_k: int = 5,
         threshold: float = 0.3,
         source_filter: Optional[str] = None,
-        rewritten_query: Optional[str] = None
+        rewritten_query: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Stream response events based on route type."""
         effective_query = rewritten_query or query
@@ -430,7 +438,7 @@ Rules:
         # Non-streaming routes: send full answer at once
         if route_type in (RouteType.META, RouteType.CLARIFICATION, RouteType.OUT_OF_SCOPE):
             result = await self.handle(
-                route_type, query, top_k, threshold, source_filter, rewritten_query
+                route_type, query, top_k, threshold, source_filter, rewritten_query, user_id=user_id
             )
             yield {"type": "token", "content": result["answer"]}
             yield {
@@ -480,7 +488,8 @@ If the user seems to want help, mention that you can answer questions about thei
             question=effective_query,
             top_k=retrieve_top_k,
             threshold=retrieve_threshold,
-            source_filter=source_filter
+            source_filter=source_filter,
+            user_id=user_id
         )
 
         sources = self._extract_sources(chunks)
