@@ -82,12 +82,13 @@ class VectorStore:
 
         return all_embeddings
 
-    def add_documents(self, documents: List[Dict[str, Any]]) -> List[str]:
+    def add_documents(self, documents: List[Dict[str, Any]], user_id: Optional[str] = None) -> List[str]:
         """
         Add documents to the vector store.
 
         Args:
             documents: List of dicts with 'text' and metadata
+            user_id: Optional user ID for per-user isolation
 
         Returns:
             List of document IDs
@@ -111,6 +112,9 @@ class VectorStore:
                 "chunk_index": int(doc.get("chunk_index", 0)),
                 "total_chunks": int(doc.get("total_chunks", 1)),
             }
+
+            if user_id:
+                metadata["user_id"] = str(user_id)
 
             if doc.get("page") is not None:
                 metadata["page"] = int(doc["page"])
@@ -149,7 +153,8 @@ class VectorStore:
         query: str,
         top_k: int = TOP_K,
         threshold: float = SIMILARITY_THRESHOLD,
-        source_filter: Optional[str] = None
+        source_filter: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Semantic search for similar documents.
@@ -159,6 +164,7 @@ class VectorStore:
             top_k: Number of results to return
             threshold: Minimum similarity score
             source_filter: Optional filter by source name
+            user_id: Optional user ID for per-user isolation
 
         Returns:
             List of matching documents with scores
@@ -167,9 +173,17 @@ class VectorStore:
         query_embedding = self._get_query_embedding(query)
 
         # Build filter
-        filter_dict = None
+        filters = []
         if source_filter:
-            filter_dict = {"source": {"$eq": source_filter}}
+            filters.append({"source": {"$eq": source_filter}})
+        if user_id:
+            filters.append({"user_id": {"$eq": str(user_id)}})
+
+        filter_dict = None
+        if len(filters) == 1:
+            filter_dict = filters[0]
+        elif len(filters) > 1:
+            filter_dict = {"$and": filters}
 
         # Query Pinecone
         results = self.index.query(
@@ -196,17 +210,19 @@ class VectorStore:
 
         return documents
 
-    def get_all_sources(self) -> List[Dict[str, Any]]:
-        """Get all unique sources."""
+    def get_all_sources(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all unique sources, optionally filtered by user."""
         sources = {}
 
         try:
             # Using a zero vector query with large top_k (Pinecone free tier workaround)
             dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
+            filter_dict = {"user_id": {"$eq": str(user_id)}} if user_id else None
             results = self.index.query(
                 vector=dummy_vector,
                 top_k=PINECONE_MAX_QUERY_RESULTS,
                 include_metadata=True,
+                filter=filter_dict,
             )
 
             for match in results.matches:
@@ -226,23 +242,29 @@ class VectorStore:
 
         return list(sources.values())
 
-    def delete_by_source(self, source_name: str) -> int:
+    def delete_by_source(self, source_name: str, user_id: Optional[str] = None) -> int:
         """
         Delete all documents from a specific source.
 
         Args:
             source_name: Name of the source to delete
+            user_id: Optional user ID for per-user isolation
 
         Returns:
             Number of documents deleted
         """
         # First, find all IDs matching the filter
         dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
+        filters = [{"source": {"$eq": source_name}}]
+        if user_id:
+            filters.append({"user_id": {"$eq": str(user_id)}})
+        filter_dict = filters[0] if len(filters) == 1 else {"$and": filters}
+
         results = self.index.query(
             vector=dummy_vector,
             top_k=PINECONE_MAX_QUERY_RESULTS,
             include_metadata=False,
-            filter={"source": {"$eq": source_name}}
+            filter=filter_dict
         )
 
         if not results.matches:
@@ -267,22 +289,28 @@ class VectorStore:
         stats = self.index.describe_index_stats()
         return stats.total_vector_count
 
-    def get_chunks_by_source(self, source_name: str) -> List[Dict[str, Any]]:
+    def get_chunks_by_source(self, source_name: str, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get all chunks for a specific source.
 
         Args:
             source_name: Name of the source document
+            user_id: Optional user ID for per-user isolation
 
         Returns:
             List of chunks with text and metadata, sorted by chunk_index
         """
         dummy_vector = [0.0] * COHERE_EMBED_DIMENSION
+        filters = [{"source": {"$eq": source_name}}]
+        if user_id:
+            filters.append({"user_id": {"$eq": str(user_id)}})
+        filter_dict = filters[0] if len(filters) == 1 else {"$and": filters}
+
         results = self.index.query(
             vector=dummy_vector,
             top_k=PINECONE_MAX_QUERY_RESULTS,
             include_metadata=True,
-            filter={"source": {"$eq": source_name}}
+            filter=filter_dict
         )
 
         if not results.matches:

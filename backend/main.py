@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -8,15 +8,22 @@ import json
 import uvicorn
 
 from backend.ingestion import (
-    PDFProcessor, Chunker, TextProcessor,
+    PDFProcessor, Chunker, RecursiveChunker, TextProcessor,
     EPUBProcessor, is_ebooklib_available,
     DOCXProcessor, is_docx_available,
     HTMLProcessor, is_html_available
 )
 from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
-from backend.config import MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING
+from backend.retrieval.bm25_index import BM25Index
+from backend.config import (
+    MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING, SQLITE_DB_PATH,
+    CHUNKING_METHOD, USE_HYBRID_RETRIEVAL
+)
 from backend.routing import QueryRouter, RouteHandlers
+from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_user, get_optional_user
+from backend.auth.database import init_db, get_db
+from backend.conversations import ConversationService
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -38,6 +45,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+async def startup():
+    os.makedirs(os.path.dirname(SQLITE_DB_PATH), exist_ok=True)
+    await init_db()
+
+
+# --- Auth endpoints (no auth required) ---
+
+@app.post("/api/auth/register")
+async def register(user: UserCreate):
+    db = await get_db()
+    try:
+        existing = await AuthService.get_user_by_username(db, user.username)
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already taken")
+        user_id = await AuthService.create_user(db, user.username, user.password)
+        token = AuthService.create_token(user_id, user.username)
+        return {"access_token": token, "token_type": "bearer", "user_id": user_id, "username": user.username}
+    finally:
+        await db.close()
+
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(user: UserLogin):
+    db = await get_db()
+    try:
+        db_user = await AuthService.get_user_by_username(db, user.username)
+        if not db_user or not AuthService.verify_password(user.password, db_user["hashed_password"]):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        token = AuthService.create_token(db_user["id"], db_user["username"])
+        return Token(access_token=token)
+    finally:
+        await db.close()
+
+
 # Lazy-load heavy components to speed up startup
 pdf_processor = None
 text_processor = None
@@ -49,17 +92,21 @@ vector_store = None
 query_engine = None
 query_router = None
 route_handlers = None
+bm25_index = None
 
 
 def get_components():
     global pdf_processor, text_processor, epub_processor, docx_processor, html_processor
-    global chunker, vector_store, query_engine, query_router, route_handlers
+    global chunker, vector_store, query_engine, query_router, route_handlers, bm25_index
 
     # Initialize basic processors first (these don't require external APIs)
     if pdf_processor is None:
         pdf_processor = PDFProcessor()
         text_processor = TextProcessor()
-        chunker = Chunker()
+        if CHUNKING_METHOD == "recursive":
+            chunker = RecursiveChunker()
+        else:
+            chunker = Chunker()
         # Initialize optional processors if available
         if is_ebooklib_available():
             epub_processor = EPUBProcessor()
@@ -67,6 +114,11 @@ def get_components():
             docx_processor = DOCXProcessor()
         if is_html_available():
             html_processor = HTMLProcessor()
+
+    # Initialize BM25 index for hybrid retrieval
+    if bm25_index is None and USE_HYBRID_RETRIEVAL:
+        bm25_index = BM25Index()
+        bm25_index.load()  # Try loading from cache
 
     # Initialize vector store and query engine (require API keys)
     # Check separately so a failed init can be retried
@@ -80,7 +132,7 @@ def get_components():
             )
 
     if query_engine is None:
-        query_engine = QueryEngine(vector_store=vector_store)
+        query_engine = QueryEngine(vector_store=vector_store, bm25_index=bm25_index)
 
     # Initialize query router and handlers (if routing is enabled)
     if query_router is None and ENABLE_QUERY_ROUTING:
@@ -111,6 +163,7 @@ class QueryRequest(BaseModel):
     threshold: float = 0.3
     source_filter: Optional[str] = None
     chat_history: Optional[List[dict]] = None
+    conversation_id: Optional[int] = None
 
 
 class TextUploadRequest(BaseModel):
@@ -181,6 +234,7 @@ SUPPORTED_EXTENSIONS = {
 @app.post("/api/upload/document", response_model=UploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
+    current_user: dict = Depends(get_optional_user),
 ):
     """Upload and process any supported document type."""
     filename = file.filename.lower()
@@ -242,7 +296,8 @@ async def upload_document(
 
     # Store in vector database
     try:
-        components["vector_store"].add_documents(chunks)
+        user_id_str = str(current_user["user_id"]) if current_user else None
+        doc_ids = components["vector_store"].add_documents(chunks, user_id=user_id_str)
     except Exception as e:
         error_msg = str(e).lower()
         if "api" in error_msg or "key" in error_msg or "unauthorized" in error_msg:
@@ -255,6 +310,18 @@ async def upload_document(
             detail = f"Failed to store document: {str(e)}"
         raise HTTPException(status_code=503, detail=detail)
 
+    # Update BM25 index for hybrid retrieval
+    if bm25_index is not None:
+        bm25_items = []
+        for chunk, doc_id in zip(chunks, doc_ids):
+            bm25_items.append({
+                "text": chunk["text"],
+                "id": doc_id,
+                "metadata": {"source": chunk.get("source", "unknown"), "source_type": chunk.get("source_type", "unknown"), "user_id": user_id_str}
+            })
+        bm25_index.add_chunks(bm25_items)
+        bm25_index.save()
+
     return UploadResponse(
         message=f"{ext.upper()[1:]} processed successfully",
         source=file.filename,
@@ -265,6 +332,7 @@ async def upload_document(
 @app.post("/api/upload/text", response_model=UploadResponse)
 async def upload_text(
     request: TextUploadRequest,
+    current_user: dict = Depends(get_optional_user),
 ):
     """Upload direct text content."""
     if not request.content.strip():
@@ -299,7 +367,8 @@ async def upload_text(
 
     # Store in vector database
     try:
-        components["vector_store"].add_documents(chunks)
+        user_id_str = str(current_user["user_id"]) if current_user else None
+        doc_ids = components["vector_store"].add_documents(chunks, user_id=user_id_str)
     except Exception as e:
         error_msg = str(e).lower()
         if "api" in error_msg or "key" in error_msg or "unauthorized" in error_msg:
@@ -312,6 +381,18 @@ async def upload_text(
             detail = f"Failed to store text: {str(e)}"
         raise HTTPException(status_code=503, detail=detail)
 
+    # Update BM25 index for hybrid retrieval
+    if bm25_index is not None:
+        bm25_items = []
+        for chunk, doc_id in zip(chunks, doc_ids):
+            bm25_items.append({
+                "text": chunk["text"],
+                "id": doc_id,
+                "metadata": {"source": chunk.get("source", "unknown"), "source_type": chunk.get("source_type", "unknown"), "user_id": user_id_str}
+            })
+        bm25_index.add_chunks(bm25_items)
+        bm25_index.save()
+
     return UploadResponse(
         message="Text processed successfully",
         source=request.title,
@@ -322,22 +403,36 @@ async def upload_text(
 @app.post("/api/query")
 async def query(
     request: QueryRequest,
+    current_user: dict = Depends(get_optional_user),
 ):
     """Query the knowledge base with streaming SSE response."""
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     components = get_components()
+    user_id_str = str(current_user["user_id"]) if current_user else None
+    user_id_int = current_user["user_id"] if current_user else None
+
+    # Load chat history from conversation if conversation_id is provided
+    chat_history = request.chat_history
+    if request.conversation_id and user_id_int:
+        if not await ConversationService.verify_ownership(request.conversation_id, user_id_int):
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        chat_history = await ConversationService.get_recent_history(request.conversation_id)
+        await ConversationService.add_message(request.conversation_id, "user", request.question)
 
     async def event_stream():
         # Send immediately so HTTP response starts right away
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
 
+        accumulated_answer = []
+        final_sources = []
+
         # Use query routing if enabled
         if ENABLE_QUERY_ROUTING and components["query_router"] is not None:
             route_result = await components["query_router"].classify(
                 request.question,
-                chat_history=request.chat_history
+                chat_history=chat_history
             )
 
             async for event in components["route_handlers"].handle_stream(
@@ -346,8 +441,13 @@ async def query(
                 top_k=request.top_k,
                 threshold=request.threshold,
                 source_filter=request.source_filter,
-                rewritten_query=route_result.rewritten_query
+                rewritten_query=route_result.rewritten_query,
+                user_id=user_id_str
             ):
+                if event.get("type") == "token":
+                    accumulated_answer.append(event.get("content", ""))
+                elif event.get("type") == "done":
+                    final_sources = event.get("sources", [])
                 yield f"data: {json.dumps(event)}\n\n"
         else:
             # Fallback: stream via query engine LLM
@@ -356,13 +456,25 @@ async def query(
                 question=request.question,
                 top_k=request.top_k,
                 threshold=request.threshold,
-                source_filter=request.source_filter
+                source_filter=request.source_filter,
+                user_id=user_id_str
             )
             async for event in qe.llm.generate_response_stream(
                 query=request.question,
                 chunks=chunks
             ):
+                if event.get("type") == "token":
+                    accumulated_answer.append(event.get("content", ""))
+                elif event.get("type") == "done":
+                    final_sources = event.get("sources", [])
                 yield f"data: {json.dumps(event)}\n\n"
+
+        # Save assistant response to conversation if conversation_id provided
+        if request.conversation_id and user_id_int:
+            full_answer = "".join(accumulated_answer)
+            await ConversationService.add_message(
+                request.conversation_id, "assistant", full_answer, final_sources
+            )
 
     return StreamingResponse(
         event_stream(),
@@ -374,21 +486,54 @@ async def query(
     )
 
 
+@app.post("/api/conversations")
+async def create_conversation(current_user: dict = Depends(get_current_user)):
+    """Create a new conversation."""
+    conv_id = await ConversationService.create_conversation(current_user["user_id"])
+    return {"conversation_id": conv_id}
+
+
+@app.get("/api/conversations")
+async def list_conversations(current_user: dict = Depends(get_current_user)):
+    """List all conversations for the current user."""
+    return await ConversationService.get_conversations(current_user["user_id"])
+
+
+@app.get("/api/conversations/{conv_id}/messages")
+async def get_messages(conv_id: int, current_user: dict = Depends(get_current_user)):
+    """Get all messages in a conversation."""
+    if not await ConversationService.verify_ownership(conv_id, current_user["user_id"]):
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return await ConversationService.get_messages(conv_id)
+
+
+@app.delete("/api/conversations/{conv_id}")
+async def delete_conversation(conv_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete a conversation and all its messages."""
+    deleted = await ConversationService.delete_conversation(conv_id, current_user["user_id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"message": "Conversation deleted"}
+
+
 @app.get("/api/sources", response_model=List[SourceResponse])
-async def get_sources():
-    """Get all ingested sources."""
+async def get_sources(current_user: dict = Depends(get_optional_user)):
+    """Get all ingested sources for the current user."""
     components = get_components()
-    sources = components["vector_store"].get_all_sources()
+    user_id_str = str(current_user["user_id"]) if current_user else None
+    sources = components["vector_store"].get_all_sources(user_id=user_id_str)
     return [SourceResponse(**s) for s in sources]
 
 
 @app.get("/api/sources/{source_name}/content")
 async def get_source_content(
     source_name: str,
+    current_user: dict = Depends(get_optional_user),
 ):
     """Get all chunks/content for a specific source document."""
     components = get_components()
-    chunks = components["vector_store"].get_chunks_by_source(source_name)
+    user_id_str = str(current_user["user_id"]) if current_user else None
+    chunks = components["vector_store"].get_chunks_by_source(source_name, user_id=user_id_str)
 
     if not chunks:
         raise HTTPException(status_code=404, detail=f"Source '{source_name}' not found")
@@ -403,10 +548,12 @@ async def get_source_content(
 @app.delete("/api/sources/{source_name}")
 async def delete_source(
     source_name: str,
+    current_user: dict = Depends(get_optional_user),
 ):
     """Delete all documents from a specific source."""
     components = get_components()
-    deleted = components["vector_store"].delete_by_source(source_name)
+    user_id_str = str(current_user["user_id"]) if current_user else None
+    deleted = components["vector_store"].delete_by_source(source_name, user_id=user_id_str)
 
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"Source '{source_name}' not found")
@@ -422,6 +569,7 @@ async def delete_source(
 async def get_chunk_context(
     chunk_id: str,
     context_size: int = 1,
+    current_user: dict = Depends(get_optional_user),
 ):
     """Get a specific chunk with surrounding context."""
     components = get_components()
@@ -437,7 +585,7 @@ async def get_chunk_context(
 
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(current_user: dict = Depends(get_optional_user)):
     """Get knowledge base statistics."""
     components = get_components()
     sources = components["vector_store"].get_all_sources()
