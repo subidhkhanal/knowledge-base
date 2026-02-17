@@ -1,4 +1,5 @@
 import os
+import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -7,6 +8,14 @@ load_dotenv()
 # Base paths
 BASE_DIR = Path(__file__).parent.parent
 
+# JWT Authentication
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-" + str(uuid.uuid4()))
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
+
+# SQLite
+SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", str(BASE_DIR / "data" / "app.db"))
+
 # Upload settings
 MAX_UPLOAD_SIZE_MB = 10
 MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # 10 MB in bytes
@@ -14,6 +23,11 @@ MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # 10 MB in bytes
 # Chunking settings
 CHUNK_SIZE = 800  # tokens
 CHUNK_OVERLAP = 150  # tokens
+CHUNKING_METHOD = os.getenv("CHUNKING_METHOD", "recursive")  # "linear" or "recursive"
+
+# Hybrid retrieval
+USE_HYBRID_RETRIEVAL = os.getenv("USE_HYBRID_RETRIEVAL", "true").lower() == "true"
+RRF_K = int(os.getenv("RRF_K", "60"))
 
 # Retrieval settings
 TOP_K = 5  # Number of chunks to retrieve

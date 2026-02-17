@@ -7,7 +7,7 @@ python-multipart>=0.0.9
 pinecone>=5.0.0
 
 # Document Processing
-PyPDF2>=3.0.1
+pdfplumber>=0.10.0
 ebooklib>=0.18
 python-docx>=1.1.0
 beautifulsoup4>=4.12.0
@@ -15,6 +15,11 @@ lxml>=5.0.0
 
 # LLM
 groq>=0.4.0
+
+# LangChain (LCEL routing + recursive chunking)
+langchain-core>=0.2.0
+langchain-groq>=0.1.0
+langchain-text-splitters>=0.2.0
 
 # Configuration
 python-dotenv>=1.0.0
@@ -29,3 +34,13 @@ cohere>=5.0.0
 ragas>=0.2.0
 google-genai>=1.0.0
 datasets>=2.0.0
+
+# Hybrid Retrieval
+rank-bm25>=0.2.2
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Database
+aiosqlite>=0.19.0

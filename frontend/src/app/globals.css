@@ -143,6 +143,10 @@ button, a, input, textarea {
   animation: pulse-subtle 1.5s ease-in-out infinite;
 }
 
+.backend-status-banner {
+  overflow: hidden;
+}
+
 /* Shadow utilities */
 .shadow-card {
   box-shadow: var(--shadow-card);
