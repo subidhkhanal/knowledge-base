@@ -5,7 +5,10 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
 import { useProjects, useCreateProject, useDeleteProject } from "@/hooks/useProjects";
-import { useApi } from "@/hooks/useApi";
+import { useToasts } from "@/hooks/useToasts";
+import { useUpload } from "@/hooks/useUpload";
+import { ToastContainer } from "@/components/Toast";
+import { UploadModal } from "@/components/UploadModal";
 
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -25,12 +28,14 @@ function ProjectsContent() {
   const { projects, isLoading, error, refetch } = useProjects();
   const { createProject, isCreating } = useCreateProject();
   const { deleteProject, isDeleting } = useDeleteProject();
-  const { createXhr } = useApi();
+  const { toasts, addToast, removeToast, updateToast } = useToasts();
+  const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Close confirmation dialog on Escape
   useEffect(() => {
@@ -41,32 +46,6 @@ function ProjectsContent() {
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [deletingSlug]);
-
-  const handleFileUpload = (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const xhr = createXhr("POST", "/api/upload/document");
-
-    xhr.addEventListener("load", () => {
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          alert("Upload complete: document added to knowledge base");
-        } else {
-          alert(data.detail || "Upload failed");
-        }
-      } catch {
-        alert("Upload failed: invalid response");
-      }
-    });
-
-    xhr.addEventListener("error", () => {
-      alert("Upload failed: could not connect to server");
-    });
-
-    xhr.send(formData);
-  };
 
   const handleCreateProject = async () => {
     if (!newTitle.trim()) return;
@@ -95,7 +74,18 @@ function ProjectsContent() {
 
   return (
     <div className="h-screen overflow-y-auto" style={{ background: "var(--bg-primary)" }}>
-      <Header onFileUpload={handleFileUpload} />
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      <AnimatePresence>
+        {showUploadModal && (
+          <UploadModal
+            onClose={() => setShowUploadModal(false)}
+            onUpload={(file, projectId) => uploadFile(file, { projectId })}
+          />
+        )}
+      </AnimatePresence>
+
+      <Header onUploadClick={() => setShowUploadModal(true)} />
 
       <main className="mx-auto max-w-4xl px-6 py-12">
         {/* Page header */}

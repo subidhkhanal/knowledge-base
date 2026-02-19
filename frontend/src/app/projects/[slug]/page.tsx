@@ -6,6 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
 import { useProject } from "@/hooks/useProjects";
 import { useApi } from "@/hooks/useApi";
+import { useToasts } from "@/hooks/useToasts";
+import { useUpload } from "@/hooks/useUpload";
+import { ToastContainer } from "@/components/Toast";
+import { UploadModal } from "@/components/UploadModal";
 import { ChatArea } from "@/components/ChatArea";
 import { ChatInput } from "@/components/ChatInput";
 import type { Message, Source } from "@/types/chat";
@@ -26,12 +30,15 @@ function formatRelativeDate(dateStr: string): string {
 
 function ProjectDetailContent({ slug }: { slug: string }) {
   const { project, isLoading, error, refetch } = useProject(slug);
-  const { createXhr, apiFetch } = useApi();
+  const { apiFetch } = useApi();
+  const { toasts, addToast, removeToast, updateToast } = useToasts();
+  const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
 
   // Chat panel state
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Streaming refs
   const tokenQueueRef = useRef<
@@ -212,39 +219,21 @@ function ProjectDetailContent({ slug }: { slug: string }) {
     // No-op for project chat
   };
 
-  const handleFileUpload = (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    if (project?.id) {
-      formData.append("project_id", String(project.id));
-    }
-
-    const xhr = createXhr("POST", "/api/upload/document");
-
-    xhr.addEventListener("load", () => {
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          alert("Upload complete: document added to knowledge base");
-          refetch();
-        } else {
-          alert(data.detail || "Upload failed");
-        }
-      } catch {
-        alert("Upload failed: invalid response");
-      }
-    });
-
-    xhr.addEventListener("error", () => {
-      alert("Upload failed: could not connect to server");
-    });
-
-    xhr.send(formData);
-  };
-
   return (
     <div className="flex h-screen flex-col" style={{ background: "var(--bg-primary)" }}>
-      <Header onFileUpload={handleFileUpload} />
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      <AnimatePresence>
+        {showUploadModal && (
+          <UploadModal
+            onClose={() => setShowUploadModal(false)}
+            onUpload={(file, projectId) => uploadFile(file, { projectId, onSuccess: refetch })}
+            defaultProjectId={project?.id ?? null}
+          />
+        )}
+      </AnimatePresence>
+
+      <Header onUploadClick={() => setShowUploadModal(true)} />
 
       <div className="flex flex-1 min-h-0">
         {/* Left: Project content */}

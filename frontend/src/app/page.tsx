@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useApi } from "@/hooks/useApi";
 import { useChatHistory } from "@/hooks/useChatHistory";
-import type { Source, ChunkContext, Toast } from "@/types/chat";
+import { useToasts } from "@/hooks/useToasts";
+import { useUpload } from "@/hooks/useUpload";
+import type { Source, ChunkContext } from "@/types/chat";
 import { ToastContainer } from "@/components/Toast";
 import { SourceModal } from "@/components/SourceModal";
+import { UploadModal } from "@/components/UploadModal";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatArea } from "@/components/ChatArea";
@@ -15,7 +18,7 @@ import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 
 export default function Home() {
-  const { apiFetch, createXhr } = useApi();
+  const { apiFetch } = useApi();
   const {
     messages,
     setMessages,
@@ -29,129 +32,18 @@ export default function Home() {
   } = useChatHistory();
 
   const { status: backendStatus, elapsedSeconds, retry: retryBackend } = useBackendStatus();
+  const { toasts, addToast, removeToast, updateToast } = useToasts();
+  const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<{ fileName: string; progress: number } | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
   const [chunkContext, setChunkContext] = useState<ChunkContext | null>(null);
   const [isLoadingContext, setIsLoadingContext] = useState(false);
 
-  const xhrRef = useRef<XMLHttpRequest | null>(null);
-  const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const tokenQueueRef = useRef<{ content: string; type: string; sources?: Source[]; provider?: string }[]>([]);
   const drainIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Toast auto-remove
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setToasts((prev) =>
-        prev.filter((t) => {
-          if (t.type === "loading") return true;
-          const age = Date.now() - parseInt(t.id);
-          return age < 4000;
-        })
-      );
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const addToast = (toast: Omit<Toast, "id">) => {
-    const id = Date.now().toString();
-    setToasts((prev) => [...prev, { ...toast, id }]);
-    return id;
-  };
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const updateToast = (id: string, updates: Partial<Toast>) => {
-    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
-  };
-
-  const handleFileUpload = (file: File) => {
-    const toastId = addToast({
-      type: "loading",
-      message: `Uploading ${file.name}`,
-      subMessage: "0%",
-    });
-
-    setUploadProgress({ fileName: file.name, progress: 0 });
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const xhr = createXhr("POST", "/api/upload/document");
-    xhrRef.current = xhr;
-
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
-        setUploadProgress({ fileName: file.name, progress: percent });
-
-        if (percent === 100) {
-          updateToast(toastId, {
-            message: `Processing ${file.name}`,
-            subMessage: "Indexing document...",
-          });
-
-          let dots = 0;
-          processingIntervalRef.current = setInterval(() => {
-            dots = (dots + 1) % 4;
-            updateToast(toastId, {
-              subMessage: `Indexing document${".".repeat(dots)}`,
-            });
-          }, 500);
-        } else {
-          updateToast(toastId, { subMessage: `${percent}%` });
-        }
-      }
-    });
-
-    xhr.addEventListener("load", () => {
-      if (processingIntervalRef.current) {
-        clearInterval(processingIntervalRef.current);
-        processingIntervalRef.current = null;
-      }
-
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          removeToast(toastId);
-          addToast({
-            type: "success",
-            message: "Upload complete",
-            subMessage: "Document added to knowledge base",
-          });
-        } else {
-          removeToast(toastId);
-          addToast({
-            type: "error",
-            message: "Upload failed",
-            subMessage: data.detail || "Unknown error",
-          });
-        }
-      } catch {
-        removeToast(toastId);
-        addToast({ type: "error", message: "Upload failed", subMessage: "Invalid response" });
-      }
-      setUploadProgress(null);
-    });
-
-    xhr.addEventListener("error", () => {
-      if (processingIntervalRef.current) {
-        clearInterval(processingIntervalRef.current);
-        processingIntervalRef.current = null;
-      }
-
-      removeToast(toastId);
-      addToast({ type: "error", message: "Upload failed", subMessage: "Could not connect to server" });
-      setUploadProgress(null);
-    });
-
-    xhr.send(formData);
-  };
 
   const startDraining = (assistantId: string) => {
     if (drainIntervalRef.current) return;
@@ -329,6 +221,12 @@ export default function Home() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       <AnimatePresence>
+        {showUploadModal && (
+          <UploadModal
+            onClose={() => setShowUploadModal(false)}
+            onUpload={(file, projectId) => uploadFile(file, { projectId })}
+          />
+        )}
         {selectedSource && (
           <SourceModal
             source={selectedSource}
@@ -339,7 +237,7 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} onFileUpload={handleFileUpload} />
+      <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} onUploadClick={() => setShowUploadModal(true)} />
 
       <BackendStatusBanner status={backendStatus} elapsedSeconds={elapsedSeconds} onRetry={retryBackend} />
 

@@ -1,16 +1,14 @@
 "use client";
 
-import { useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
-  onFileUpload?: (file: File) => void;
+  onUploadClick?: () => void;
 }
 
-export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export function Header({ onToggleSidebar, onUploadClick }: HeaderProps) {
   const { isLoggedIn, username, logout } = useAuth();
 
   return (
@@ -55,31 +53,18 @@ export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
 
         {/* Right: Upload + Documents nav */}
         <div className="flex items-center gap-1">
-          {onFileUpload && (
-            <>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-bg-hover"
-                style={{ color: "var(--text-secondary)" }}
-                title="Upload documents"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                <span className="hidden lg:inline">Upload</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file && onFileUpload) onFileUpload(file);
-                  if (e.target) e.target.value = "";
-                }}
-                className="hidden"
-              />
-            </>
+          {onUploadClick && (
+            <button
+              onClick={onUploadClick}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-bg-hover"
+              style={{ color: "var(--text-secondary)" }}
+              title="Upload documents"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span className="hidden lg:inline">Upload</span>
+            </button>
           )}
           <Link
             href="/projects"
