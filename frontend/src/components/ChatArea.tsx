@@ -106,7 +106,7 @@ export function ChatArea({ messages, onSourceClick }: ChatAreaProps) {
             style={{
               background: "var(--accent)",
               color: "white",
-              boxShadow: "0 2px 8px rgba(124, 58, 237, 0.4)",
+              boxShadow: "0 2px 8px rgba(14, 165, 233, 0.3)",
             }}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

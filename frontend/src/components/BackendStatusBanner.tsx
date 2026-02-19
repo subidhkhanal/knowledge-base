@@ -45,9 +45,9 @@ export function BackendStatusBanner({ status, elapsedSeconds, onRetry }: Backend
                     : "var(--accent-subtle)",
                 border: `1px solid ${
                   status === "offline"
-                    ? "rgba(239, 68, 68, 0.3)"
+                    ? "rgba(220, 38, 38, 0.2)"
                     : status === "online"
-                    ? "rgba(34, 197, 94, 0.3)"
+                    ? "rgba(22, 163, 74, 0.2)"
                     : "var(--border-accent)"
                 }`,
               }}

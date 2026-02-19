@@ -155,7 +155,7 @@ export function Sidebar({
                           className="group relative flex items-center rounded-lg px-3 py-2.5 cursor-pointer hover:bg-bg-hover"
                           onClick={() => onSelectConversation(conv.id)}
                           style={{
-                            background: conv.id === currentConversationId ? "rgba(124, 58, 237, 0.08)" : "transparent",
+                            background: conv.id === currentConversationId ? "rgba(14, 165, 233, 0.08)" : "transparent",
                             borderLeft: conv.id === currentConversationId ? "3px solid var(--accent)" : "3px solid transparent",
                           }}
                         >

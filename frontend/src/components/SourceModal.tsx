@@ -18,7 +18,7 @@ export function SourceModal({ source, chunkContext, isLoadingContext, onClose }:
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0, 0, 0, 0.7)" }}
+      style={{ background: "rgba(0, 0, 0, 0.3)" }}
       onClick={onClose}
     >
       <motion.div
@@ -30,7 +30,7 @@ export function SourceModal({ source, chunkContext, isLoadingContext, onClose }:
         style={{
           background: "var(--bg-primary)",
           border: "1px solid var(--border)",
-          boxShadow: "0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.5)",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.1)",
         }}
         onClick={(e) => e.stopPropagation()}
       >

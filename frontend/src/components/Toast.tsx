@@ -31,7 +31,7 @@ export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
               background: "var(--bg-elevated)",
               border: "1px solid var(--border)",
               minWidth: "280px",
-              boxShadow: "0 0 0 1px var(--border), 0 4px 12px rgba(0,0,0,0.3)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.06)",
             }}
           >
             {toast.type === "loading" && (

@@ -98,7 +98,7 @@ function DocumentsContent() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
+    <div className="h-screen overflow-y-auto" style={{ background: "var(--bg-primary)" }}>
       <Header />
 
       {/* Content */}
