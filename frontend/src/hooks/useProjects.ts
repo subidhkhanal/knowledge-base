@@ -125,6 +125,58 @@ export function useProject(slug: string) {
   return { project, isLoading, error, refetch: fetchProject };
 }
 
+export function useDeleteArticle() {
+  const { apiFetch } = useApi();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const deleteArticle = useCallback(
+    async (slug: string) => {
+      setIsDeleting(true);
+      try {
+        const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to delete article");
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    [apiFetch]
+  );
+
+  return { deleteArticle, isDeleting };
+}
+
+export function useDeleteDocument() {
+  const { apiFetch } = useApi();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const deleteDocument = useCallback(
+    async (docId: number) => {
+      setIsDeleting(true);
+      try {
+        const res = await apiFetch(`/api/documents/${docId}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to delete document");
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    [apiFetch]
+  );
+
+  return { deleteDocument, isDeleting };
+}
+
 export function useCreateProject() {
   const { apiFetch } = useApi();
   const [isCreating, setIsCreating] = useState(false);

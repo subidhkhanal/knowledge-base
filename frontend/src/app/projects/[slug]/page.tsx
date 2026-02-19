@@ -1,10 +1,11 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
-import { useProject } from "@/hooks/useProjects";
+import { useProject, useDeleteArticle, useDeleteDocument } from "@/hooks/useProjects";
 import { useToasts } from "@/hooks/useToasts";
 import { useUpload } from "@/hooks/useUpload";
 import { ToastContainer } from "@/components/Toast";
@@ -36,11 +37,66 @@ function getSourceInfo(source: string) {
   return sourceConfig[source] || { label: source, color: "#64748b", bg: "rgba(100, 116, 139, 0.1)" };
 }
 
+function TrashIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
 function ProjectDetailContent({ slug }: { slug: string }) {
+  const router = useRouter();
   const { project, isLoading, error, refetch } = useProject(slug);
   const { toasts, addToast, removeToast, updateToast } = useToasts();
   const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
   const [showUploadModal, setShowUploadModal] = useState(false);
+
+  const { deleteArticle, isDeleting: isDeletingArticle } = useDeleteArticle();
+  const { deleteDocument, isDeleting: isDeletingDocument } = useDeleteDocument();
+
+  const [deletingArticle, setDeletingArticle] = useState<{ slug: string; title: string } | null>(null);
+  const [deletingDocument, setDeletingDocument] = useState<{ id: number; source: string } | null>(null);
+
+  const isDeleting = isDeletingArticle || isDeletingDocument;
+
+  // Close dialog on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDeletingArticle(null);
+        setDeletingDocument(null);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  const handleDeleteArticle = useCallback(async () => {
+    if (!deletingArticle) return;
+    try {
+      await deleteArticle(deletingArticle.slug);
+      addToast({ type: "success", message: "Article deleted" });
+      setDeletingArticle(null);
+      refetch();
+    } catch (err) {
+      addToast({ type: "error", message: err instanceof Error ? err.message : "Failed to delete article" });
+    }
+  }, [deletingArticle, deleteArticle, addToast, refetch]);
+
+  const handleDeleteDocument = useCallback(async () => {
+    if (!deletingDocument) return;
+    try {
+      await deleteDocument(deletingDocument.id);
+      addToast({ type: "success", message: "Document deleted" });
+      setDeletingDocument(null);
+      refetch();
+    } catch (err) {
+      addToast({ type: "error", message: err instanceof Error ? err.message : "Failed to delete document" });
+    }
+  }, [deletingDocument, deleteDocument, addToast, refetch]);
+
+  const showingDialog = deletingArticle || deletingDocument;
 
   return (
     <div className="flex h-screen flex-col" style={{ background: "var(--bg-primary)" }}>
@@ -168,85 +224,99 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                 {project.articles.length > 0 && (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {project.articles.map((article, index) => (
-                      <Link key={article.slug} href={`/projects/${slug}/articles/${article.slug}`}>
-                        <motion.div
-                          initial={{ opacity: 0, y: 24 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            duration: 0.6,
-                            ease: [0.16, 1, 0.3, 1],
-                            delay: index * 0.05,
-                          }}
-                          className="group flex flex-col gap-3 rounded-xl p-4 cursor-pointer"
-                          style={{
-                            background: "var(--bg-secondary)",
-                            border: "1px solid var(--border)",
-                            boxShadow: "var(--shadow-card)",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "var(--border-hover)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "var(--border)";
+                      <motion.div
+                        key={article.slug}
+                        initial={{ opacity: 0, y: 24 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.6,
+                          ease: [0.16, 1, 0.3, 1],
+                          delay: index * 0.05,
+                        }}
+                        className="group relative flex flex-col gap-3 rounded-xl p-4 cursor-pointer"
+                        style={{
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border)",
+                          boxShadow: "var(--shadow-card)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = "var(--border-hover)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = "var(--border)";
+                        }}
+                        onClick={() => router.push(`/projects/${slug}/articles/${article.slug}`)}
+                      >
+                        {/* Delete button */}
+                        <button
+                          className="absolute top-3 right-3 rounded-lg p-1.5 opacity-0 transition-opacity cursor-pointer group-hover:opacity-100"
+                          style={{ color: "var(--text-tertiary)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.background = "var(--error-bg)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingArticle({ slug: article.slug, title: article.title });
                           }}
                         >
-                          {/* Source badge */}
-                          <div className="flex items-center gap-2">
-                            {(() => {
-                              const src = getSourceInfo(article.source);
-                              return (
+                          <TrashIcon />
+                        </button>
+
+                        {/* Source badge */}
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const src = getSourceInfo(article.source);
+                            return (
+                              <span
+                                className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                                style={{ background: src.bg, color: src.color }}
+                              >
                                 <span
-                                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                                  style={{ background: src.bg, color: src.color }}
-                                >
-                                  <span
-                                    className="h-1.5 w-1.5 rounded-full"
-                                    style={{ background: src.color }}
-                                  />
-                                  {src.label}
-                                </span>
-                              );
-                            })()}
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ background: src.color }}
+                                />
+                                {src.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Title */}
+                        <h3
+                          className="text-sm font-medium leading-snug line-clamp-2"
+                          style={{ color: "var(--text-primary)" }}
+                        >
+                          {article.title}
+                        </h3>
+
+                        {/* Tags */}
+                        {article.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {article.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded-md px-2 py-0.5 text-xs"
+                                style={{
+                                  background: "var(--accent-subtle)",
+                                  color: "var(--accent)",
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
                           </div>
+                        )}
 
-                          {/* Title */}
-                          <h3
-                            className="text-sm font-medium leading-snug line-clamp-2"
-                            style={{ color: "var(--text-primary)" }}
-                          >
-                            {article.title}
-                          </h3>
-
-                          {/* Tags */}
-                          {article.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {article.tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="rounded-md px-2 py-0.5 text-xs"
-                                  style={{
-                                    background: "var(--accent-subtle)",
-                                    color: "var(--accent)",
-                                  }}
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
+                        {/* Meta */}
+                        <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                          <span>{formatRelativeDate(article.created_at)}</span>
+                          {article.conversation_length > 0 && (
+                            <>
+                              <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
+                              <span>{article.conversation_length} messages</span>
+                            </>
                           )}
-
-                          {/* Meta */}
-                          <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                            <span>{formatRelativeDate(article.created_at)}</span>
-                            {article.conversation_length > 0 && (
-                              <>
-                                <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
-                                <span>{article.conversation_length} messages</span>
-                              </>
-                            )}
-                          </div>
-                        </motion.div>
-                      </Link>
+                        </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
@@ -292,73 +362,142 @@ function ProjectDetailContent({ slug }: { slug: string }) {
 
                 {project.documents.length > 0 && (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {project.documents.map((document, index) => {
-                      const card = (
-                        <motion.div
-                          key={document.source}
-                          initial={{ opacity: 0, y: 24 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            duration: 0.6,
-                            ease: [0.16, 1, 0.3, 1],
-                            delay: index * 0.05,
-                          }}
-                          className={`flex flex-col gap-3 rounded-xl p-4${document.document_id ? " cursor-pointer" : ""}`}
-                          style={{
-                            background: "var(--bg-secondary)",
-                            border: "1px solid var(--border)",
-                            boxShadow: "var(--shadow-card)",
-                          }}
-                          onMouseEnter={document.document_id ? (e) => {
-                            e.currentTarget.style.borderColor = "var(--border-hover)";
-                          } : undefined}
-                          onMouseLeave={document.document_id ? (e) => {
-                            e.currentTarget.style.borderColor = "var(--border)";
-                          } : undefined}
-                        >
-                          {/* Type badge */}
-                          <span
-                            className="inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                            style={{
-                              background: document.source_type === "pdf" ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)",
-                              color: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                    {project.documents.map((document, index) => (
+                      <motion.div
+                        key={document.source}
+                        initial={{ opacity: 0, y: 24 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.6,
+                          ease: [0.16, 1, 0.3, 1],
+                          delay: index * 0.05,
+                        }}
+                        className={`group relative flex flex-col gap-3 rounded-xl p-4${document.document_id ? " cursor-pointer" : ""}`}
+                        style={{
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border)",
+                          boxShadow: "var(--shadow-card)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = "var(--border-hover)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = "var(--border)";
+                        }}
+                        onClick={document.document_id ? () => router.push(`/projects/${slug}/documents/${document.document_id}`) : undefined}
+                      >
+                        {/* Delete button */}
+                        {document.document_id && (
+                          <button
+                            className="absolute top-3 right-3 rounded-lg p-1.5 opacity-0 transition-opacity cursor-pointer group-hover:opacity-100"
+                            style={{ color: "var(--text-tertiary)" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.background = "var(--error-bg)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingDocument({ id: document.document_id!, source: document.source });
                             }}
                           >
-                            <span
-                              className="h-1.5 w-1.5 rounded-full"
-                              style={{
-                                background: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
-                              }}
-                            />
-                            {document.source_type === "pdf" ? "PDF" : "Document"}
-                          </span>
+                            <TrashIcon />
+                          </button>
+                        )}
 
-                          <h3
-                            className="text-sm font-medium leading-snug line-clamp-2"
-                            style={{ color: "var(--text-primary)" }}
-                          >
-                            {document.source}
-                          </h3>
+                        {/* Type badge */}
+                        <span
+                          className="inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                          style={{
+                            background: document.source_type === "pdf" ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)",
+                            color: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                          }}
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{
+                              background: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                            }}
+                          />
+                          {document.source_type === "pdf" ? "PDF" : "Document"}
+                        </span>
 
-                          <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                            {document.chunk_count} {document.chunk_count === 1 ? "chunk" : "chunks"}
-                          </div>
-                        </motion.div>
-                      );
+                        <h3
+                          className="text-sm font-medium leading-snug line-clamp-2"
+                          style={{ color: "var(--text-primary)" }}
+                        >
+                          {document.source}
+                        </h3>
 
-                      return document.document_id ? (
-                        <Link key={document.source} href={`/projects/${slug}/documents/${document.document_id}`}>
-                          {card}
-                        </Link>
-                      ) : (
-                        <div key={document.source}>{card}</div>
-                      );
-                    })}
+                        <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                          {document.chunk_count} {document.chunk_count === 1 ? "chunk" : "chunks"}
+                        </div>
+                      </motion.div>
+                    ))}
                   </div>
                 )}
               </section>
             </>
           )}
+
+          {/* Delete confirmation dialog */}
+          <AnimatePresence>
+            {showingDialog && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                style={{ background: "rgba(0, 0, 0, 0.3)" }}
+                onClick={() => { setDeletingArticle(null); setDeletingDocument(null); }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                  transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  className="w-full max-w-sm rounded-xl p-5"
+                  style={{
+                    background: "var(--bg-primary)",
+                    border: "1px solid var(--border)",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.1)",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h3
+                    className="mb-2 text-sm font-semibold"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    Delete {deletingArticle ? "Article" : "Document"}
+                  </h3>
+                  <p
+                    className="mb-5 text-sm leading-relaxed"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Are you sure you want to delete &ldquo;{deletingArticle?.title || deletingDocument?.source}&rdquo;? This will permanently remove it and its vector embeddings.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => { setDeletingArticle(null); setDeletingDocument(null); }}
+                      className="rounded-lg px-3 py-1.5 text-sm cursor-pointer"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={deletingArticle ? handleDeleteArticle : handleDeleteDocument}
+                      disabled={isDeleting}
+                      className="rounded-lg px-4 py-1.5 text-sm font-medium cursor-pointer disabled:opacity-50"
+                      style={{
+                        background: "var(--error)",
+                        color: "white",
+                      }}
+                    >
+                      {isDeleting ? "Deleting..." : `Delete ${deletingArticle ? "Article" : "Document"}`}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
       </div>
     </div>

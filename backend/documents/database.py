@@ -101,3 +101,18 @@ async def get_documents_by_project(project_id: int) -> List[Dict[str, Any]]:
         ]
     finally:
         await db.close()
+
+
+async def delete_document(doc_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Delete a document by ID. Returns the document dict (for cleanup) or None if not found."""
+    doc = await get_document_by_id(doc_id, user_id)
+    if not doc:
+        return None
+
+    db = await get_db()
+    try:
+        await db.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+        await db.commit()
+        return doc
+    finally:
+        await db.close()

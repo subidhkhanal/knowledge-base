@@ -672,6 +672,44 @@ async def delete_source(
     }
 
 
+@app.delete("/api/documents/{doc_id}")
+async def delete_document(
+    doc_id: int,
+    current_user: dict = Depends(get_optional_user),
+):
+    """Delete a document: SQLite record, Pinecone vectors, and file on disk."""
+    from backend.documents import database as documents_db
+
+    user_id = current_user["user_id"] if current_user else None
+    doc = await documents_db.delete_document(doc_id, user_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Delete vectors from Pinecone
+    components = get_components()
+    user_id_str = str(user_id) if user_id else None
+    chunks_deleted = 0
+    try:
+        chunks_deleted = components["vector_store"].delete_by_source(
+            doc["filename"], user_id=user_id_str
+        )
+    except Exception:
+        pass  # Best effort — vectors may already be gone
+
+    # Delete physical file
+    try:
+        if os.path.exists(doc["storage_path"]):
+            os.remove(doc["storage_path"])
+    except Exception:
+        pass  # Best effort
+
+    return {
+        "success": True,
+        "message": f"Document '{doc['filename']}' deleted",
+        "chunks_deleted": chunks_deleted,
+    }
+
+
 @app.get("/api/chunks/{chunk_id}")
 async def get_chunk_context(
     chunk_id: str,
