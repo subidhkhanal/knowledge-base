@@ -50,33 +50,33 @@ async def publish_conversation(
             groq_api_key=groq_api_key,
             project_id=project_id,
         )
+
+        # Save to SQLite
+        if request.update_slug:
+            await db.update_article(
+                slug=result["slug"],
+                title=request.title,
+                tags=request.tags,
+                content_markdown=result["structured_content"],
+                chunks_count=result["chunks_count"],
+                conversation_length=result["conversation_length"],
+            )
+        else:
+            await db.insert_article(
+                slug=result["slug"],
+                title=request.title,
+                tags=request.tags,
+                source=request.source,
+                content_markdown=result["structured_content"],
+                user_id=current_user["user_id"],
+                chunks_count=result["chunks_count"],
+                conversation_length=result["conversation_length"],
+                project_id=project_id,
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Publishing failed: {str(e)}")
-
-    # Save to SQLite
-    if request.update_slug:
-        await db.update_article(
-            slug=result["slug"],
-            title=request.title,
-            tags=request.tags,
-            content_markdown=result["structured_content"],
-            chunks_count=result["chunks_count"],
-            conversation_length=result["conversation_length"],
-        )
-    else:
-        await db.insert_article(
-            slug=result["slug"],
-            title=request.title,
-            tags=request.tags,
-            source=request.source,
-            content_markdown=result["structured_content"],
-            user_id=current_user["user_id"],
-            chunks_count=result["chunks_count"],
-            conversation_length=result["conversation_length"],
-            project_id=project_id,
-        )
 
     return PublishResponse(
         success=True,
@@ -235,23 +235,23 @@ async def publish_web_article(
             groq_api_key=groq_api_key,
             project_id=project_id,
         )
+
+        # Save to SQLite
+        await db.insert_article(
+            slug=result["slug"],
+            title=request.title,
+            tags=request.tags,
+            source="web",
+            content_markdown=result["structured_content"],
+            user_id=current_user["user_id"],
+            chunks_count=result["chunks_count"],
+            conversation_length=0,
+            project_id=project_id,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Publishing failed: {str(e)}")
-
-    # Save to SQLite
-    await db.insert_article(
-        slug=result["slug"],
-        title=request.title,
-        tags=request.tags,
-        source="web",
-        content_markdown=result["structured_content"],
-        user_id=current_user["user_id"],
-        chunks_count=result["chunks_count"],
-        conversation_length=0,
-        project_id=project_id,
-    )
 
     return PublishResponse(
         success=True,

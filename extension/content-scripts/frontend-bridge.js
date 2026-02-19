@@ -24,9 +24,13 @@ function syncAuth() {
 // Sync on page load
 syncAuth();
 
-// Sync when localStorage changes (login/logout on the same tab dispatches StorageEvent)
-window.addEventListener("storage", (e) => {
-  if (STORAGE_KEYS.includes(e.key)) {
+// Poll localStorage for changes every 2s.
+// (StorageEvent from page context doesn't reliably reach content scripts in Chrome's isolated world)
+let lastSynced = JSON.stringify(STORAGE_KEYS.map(k => localStorage.getItem(k)));
+setInterval(() => {
+  const current = JSON.stringify(STORAGE_KEYS.map(k => localStorage.getItem(k)));
+  if (current !== lastSynced) {
+    lastSynced = current;
     syncAuth();
   }
-});
+}, 2000);

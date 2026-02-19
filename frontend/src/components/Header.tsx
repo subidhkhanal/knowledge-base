@@ -92,7 +92,7 @@ export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
             <span className="hidden lg:inline">Projects</span>
           </Link>
           {isLoggedIn ? (
-            <div className="flex items-center gap-2 ml-2 pl-2" style={{ borderLeft: "1px solid var(--border)" }}>
+            <div className="flex items-center ml-2 pl-2" style={{ borderLeft: "1px solid var(--border)" }}>
               <Link
                 href="/settings"
                 className="text-xs font-medium hover:underline"
@@ -100,13 +100,6 @@ export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
               >
                 {username}
               </Link>
-              <button
-                onClick={logout}
-                className="rounded-md px-2 py-1 text-xs cursor-pointer hover:bg-bg-hover"
-                style={{ color: "var(--text-tertiary)" }}
-              >
-                Logout
-              </button>
             </div>
           ) : (
             <Link

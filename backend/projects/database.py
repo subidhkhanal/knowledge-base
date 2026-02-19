@@ -35,6 +35,17 @@ async def create_projects_table():
             CREATE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug);
         """)
         await db.commit()
+
+        # Ensure the default "Uncategorized" project exists
+        rows = await db.execute_fetchall(
+            "SELECT 1 FROM projects WHERE slug = 'uncategorized'"
+        )
+        if not rows:
+            await db.execute(
+                """INSERT INTO projects (slug, title, description)
+                   VALUES ('uncategorized', 'Uncategorized', 'Default project for unsorted articles and documents')""",
+            )
+            await db.commit()
     finally:
         await db.close()
 

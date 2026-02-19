@@ -7,6 +7,7 @@ layer to avoid circular imports with main.py's lazy-loading pattern.
 """
 
 import re
+import time
 from typing import List, Dict, Any, Optional
 
 from backend.articles.structurer import structure_conversation, structure_web_article
@@ -14,9 +15,10 @@ from backend.articles import database as db
 
 
 def generate_slug(title: str) -> str:
-    """Convert a title to a URL-friendly slug."""
-    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-    return slug[:80]
+    """Convert a title to a URL-friendly slug. Appends a short timestamp suffix to ensure uniqueness."""
+    base = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:70]
+    suffix = hex(int(time.time()))[2:]  # e.g. "65ab3c1f"
+    return f"{base}-{suffix}"
 
 
 def publish_article(

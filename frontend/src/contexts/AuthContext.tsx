@@ -40,11 +40,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.username, newUsername);
     setToken(newToken);
     setUsername(newUsername);
-    // Dispatch storage event so the extension bridge picks it up
-    window.dispatchEvent(new StorageEvent("storage", {
-      key: STORAGE_KEYS.token,
-      newValue: newToken,
-    }));
   }, []);
 
   const logout = useCallback(() => {
@@ -54,19 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUsername(null);
     setGroqApiKey(null);
-    window.dispatchEvent(new StorageEvent("storage", {
-      key: STORAGE_KEYS.token,
-      newValue: null,
-    }));
   }, []);
 
   const setGroqKey = useCallback((key: string) => {
     localStorage.setItem(STORAGE_KEYS.groqKey, key);
     setGroqApiKey(key);
-    window.dispatchEvent(new StorageEvent("storage", {
-      key: STORAGE_KEYS.groqKey,
-      newValue: key,
-    }));
   }, []);
 
   return (

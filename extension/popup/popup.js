@@ -107,13 +107,16 @@ async function loadProjects() {
     const data = await resp.json();
 
     if (data.projects && data.projects.length > 0) {
-      select.innerHTML =
-        '<option value="">(No project)</option>' +
-        data.projects
-          .map(
-            (p) => `<option value="${p.slug}">${p.title}</option>`
-          )
-          .join("");
+      select.innerHTML = data.projects
+        .map(
+          (p) => `<option value="${p.slug}">${p.title}</option>`
+        )
+        .join("");
+      // Pre-select "Uncategorized" if it exists
+      const uncategorized = data.projects.find((p) => p.slug === "uncategorized");
+      if (uncategorized) {
+        select.value = uncategorized.slug;
+      }
     } else {
       select.innerHTML = '<option value="">(No projects — create one)</option>';
     }
@@ -282,7 +285,7 @@ async function publishArticle() {
   const errorEl = document.getElementById("error");
 
   btn.disabled = true;
-  btn.textContent = "Publishing...";
+  btn.textContent = "Saving...";
   resultEl.style.display = "none";
   errorEl.style.display = "none";
 
@@ -433,7 +436,7 @@ function showError(el, message) {
 
 function resetPublishBtn(btn) {
   btn.disabled = false;
-  btn.textContent = "Publish";
+  btn.textContent = "Save Article";
 }
 
 // ─── Event Binding ───
