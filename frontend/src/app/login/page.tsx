@@ -1,0 +1,211 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const { login, setGroqKey, isLoggedIn } = useAuth();
+
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [groqKey, setGroqKeyInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Redirect if already logged in
+  if (isLoggedIn) {
+    router.replace("/");
+    return null;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!username.trim() || !password.trim()) {
+      setError("Enter username and password");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+
+    try {
+      const resp = await fetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        const detail = typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail) || `HTTP ${resp.status}`;
+        throw new Error(detail);
+      }
+
+      const data = await resp.json();
+      login(data.access_token, data.username || username.trim());
+
+      if (groqKey.trim()) {
+        setGroqKey(groqKey.trim());
+      }
+
+      router.replace("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{ background: "var(--bg-deep)" }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-8"
+        style={{
+          background: "var(--bg-primary)",
+          boxShadow: "var(--shadow-card)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        {/* Logo */}
+        <div className="mb-6 text-center">
+          <div
+            className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl"
+            style={{
+              background: "linear-gradient(135deg, var(--accent) 0%, #0284c7 100%)",
+            }}
+          >
+            <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+            Personal Knowledge Base
+          </h1>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-5 flex gap-1 rounded-lg p-1" style={{ background: "var(--bg-secondary)" }}>
+          {(["login", "register"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => { setMode(tab); setError(null); }}
+              className="flex-1 rounded-md px-3 py-1.5 text-sm font-medium cursor-pointer"
+              style={{
+                background: mode === tab ? "var(--bg-primary)" : "transparent",
+                color: mode === tab ? "var(--text-primary)" : "var(--text-secondary)",
+                boxShadow: mode === tab ? "var(--shadow-card)" : "none",
+              }}
+            >
+              {tab === "login" ? "Login" : "Register"}
+            </button>
+          ))}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div
+            className="mb-4 rounded-lg px-3 py-2 text-sm"
+            style={{ background: "var(--error-bg)", color: "var(--error)" }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+              Username
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Your username"
+              autoComplete="username"
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={{
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Your password"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={{
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+              Groq API Key <span style={{ color: "var(--text-tertiary)" }}>(optional)</span>
+            </label>
+            <input
+              type="password"
+              value={groqKey}
+              onChange={(e) => setGroqKeyInput(e.target.value)}
+              placeholder="gsk_..."
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={{
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            />
+            <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+              Free at{" "}
+              <a
+                href="https://console.groq.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--accent)" }}
+              >
+                console.groq.com
+              </a>
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="mt-2 w-full rounded-lg px-4 py-2.5 text-sm font-medium text-white cursor-pointer disabled:opacity-60"
+            style={{
+              background: "linear-gradient(135deg, var(--accent) 0%, #0284c7 100%)",
+            }}
+          >
+            {isSubmitting
+              ? mode === "login" ? "Logging in..." : "Registering..."
+              : mode === "login" ? "Login" : "Register"
+            }
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -10,6 +11,7 @@ interface HeaderProps {
 
 export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isLoggedIn, username, logout } = useAuth();
 
   return (
     <header
@@ -89,6 +91,32 @@ export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
             </svg>
             <span className="hidden lg:inline">Projects</span>
           </Link>
+          {isLoggedIn ? (
+            <div className="flex items-center gap-2 ml-2 pl-2" style={{ borderLeft: "1px solid var(--border)" }}>
+              <Link
+                href="/settings"
+                className="text-xs font-medium hover:underline"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {username}
+              </Link>
+              <button
+                onClick={logout}
+                className="rounded-md px-2 py-1 text-xs cursor-pointer hover:bg-bg-hover"
+                style={{ color: "var(--text-tertiary)" }}
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="ml-2 rounded-lg px-3 py-1.5 text-xs font-medium text-white"
+              style={{ background: "var(--accent)" }}
+            >
+              Login
+            </Link>
+          )}
         </div>
       </div>
     </header>

@@ -11,44 +11,16 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <!-- Auth View -->
+    <!-- Auth View — prompts user to login on the website -->
     <div id="auth-view" class="view">
       <h1><span class="logo">C</span> Chat to Webpage</h1>
 
-      <div class="auth-tabs">
-        <button class="auth-tab active" data-tab="login">Login</button>
-        <button class="auth-tab" data-tab="register">Register</button>
+      <div class="login-prompt">
+        <p class="login-prompt-text">Login on the website to use this extension.</p>
+        <button id="open-login-btn" class="btn primary">Open Login Page</button>
       </div>
 
       <div id="auth-status" class="status"></div>
-
-      <label for="auth-username">Username</label>
-      <input
-        type="text"
-        id="auth-username"
-        placeholder="Your username"
-        autocomplete="username"
-      />
-
-      <label for="auth-password">Password</label>
-      <input
-        type="password"
-        id="auth-password"
-        placeholder="Your password"
-        autocomplete="current-password"
-      />
-
-      <label for="auth-groq-key">Groq API Key</label>
-      <input
-        type="password"
-        id="auth-groq-key"
-        placeholder="gsk_..."
-      />
-      <p class="helper-text">
-        Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a>
-      </p>
-
-      <button id="auth-submit-btn" class="btn primary">Login</button>
     </div>
 
     <!-- Main View -->
@@ -120,21 +92,6 @@
       <div id="result" class="result"></div>
       <div id="error" class="error-box"></div>
 
-      <!-- Settings -->
-      <details id="settings-section">
-        <summary>Settings</summary>
-
-        <label for="settings-groq-key">Groq API Key</label>
-        <input
-          type="password"
-          id="settings-groq-key"
-          placeholder="gsk_..."
-        />
-        <p class="helper-text">
-          Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a>
-        </p>
-        <button id="save-groq-key-btn" class="btn secondary">Save Key</button>
-      </details>
     </div>
 
     <script src="popup.js"></script>

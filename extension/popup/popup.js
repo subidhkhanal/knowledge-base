@@ -1,6 +1,8 @@
 /**
  * Chat to Webpage extension popup logic.
- * Handles: auth, BYOK Groq key, scrape (chatbot + web articles),
+ * Auth is handled on the website (localhost:3000/login).
+ * The frontend-bridge content script syncs tokens to chrome.storage.local.
+ * Handles: scrape (chatbot + web articles),
  * project selection, and publish.
  */
 
@@ -20,7 +22,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Pre-wake backend (fire-and-forget)
   fetch(`${BACKEND_URL}/health`).catch(() => {});
 
-  // Load stored credentials
+  // Load stored credentials (synced from website via frontend-bridge)
   const stored = await chrome.storage.local.get([
     "authToken",
     "username",
@@ -29,12 +31,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   authToken = stored.authToken || null;
   username = stored.username || null;
   groqApiKey = stored.groqApiKey || null;
-
-  // Pre-fill Groq key if stored
-  if (groqApiKey) {
-    document.getElementById("auth-groq-key").value = groqApiKey;
-    document.getElementById("settings-groq-key").value = groqApiKey;
-  }
 
   // Check auth state
   if (authToken) {
@@ -46,7 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       authToken = null;
       await chrome.storage.local.remove("authToken");
-      showAuthView("Session expired — please login again");
+      showAuthView("Session expired — please login on the website");
     }
   } else {
     showAuthView();
@@ -70,9 +66,6 @@ function showMainView() {
   document.getElementById("main-view").classList.remove("hidden");
   document.getElementById("display-username").textContent = username || "";
   document.getElementById("view-kb-link").href = `${FRONTEND_URL}/projects`;
-  if (groqApiKey) {
-    document.getElementById("settings-groq-key").value = groqApiKey;
-  }
 }
 
 // ─── Token Validation ───
@@ -90,65 +83,8 @@ async function validateToken() {
 
 // ─── Authentication ───
 
-let authMode = "login";
-
-async function handleAuth() {
-  const btn = document.getElementById("auth-submit-btn");
-  const statusEl = document.getElementById("auth-status");
-  const usernameVal = document.getElementById("auth-username").value.trim();
-  const password = document.getElementById("auth-password").value.trim();
-  const groqKey = document.getElementById("auth-groq-key").value.trim();
-
-  if (!usernameVal || !password) {
-    showStatus(statusEl, "Enter username and password", "error");
-    return;
-  }
-
-  if (!groqKey) {
-    showStatus(statusEl, "Enter your Groq API key", "error");
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = authMode === "login" ? "Logging in..." : "Registering...";
-
-  const endpoint =
-    authMode === "login" ? "/api/auth/login" : "/api/auth/register";
-
-  try {
-    const resp = await fetch(`${BACKEND_URL}${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: usernameVal, password }),
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${resp.status}`);
-    }
-
-    const data = await resp.json();
-    authToken = data.access_token;
-    username = data.username || usernameVal;
-    groqApiKey = groqKey;
-
-    await chrome.storage.local.set({ authToken, username, groqApiKey });
-
-    document.getElementById("auth-password").value = "";
-
-    showMainView();
-    await loadProjects();
-    await triggerScrape();
-  } catch (e) {
-    showStatus(
-      statusEl,
-      `${authMode === "login" ? "Login" : "Registration"} failed: ${e.message}`,
-      "error"
-    );
-  }
-
-  btn.disabled = false;
-  btn.textContent = authMode === "login" ? "Login" : "Register";
+function openLoginPage() {
+  chrome.tabs.create({ url: `${FRONTEND_URL}/login` });
 }
 
 function logout() {
@@ -156,60 +92,6 @@ function logout() {
   username = null;
   chrome.storage.local.remove(["authToken", "username"]);
   showAuthView();
-}
-
-// ─── Groq Key Validation ───
-
-async function validateGroqKey(key) {
-  try {
-    const resp = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [{ role: "user", content: "hi" }],
-          max_tokens: 1,
-        }),
-      }
-    );
-    return resp.ok;
-  } catch {
-    return false;
-  }
-}
-
-async function saveGroqKey() {
-  const btn = document.getElementById("save-groq-key-btn");
-  const input = document.getElementById("settings-groq-key");
-  const key = input.value.trim();
-
-  if (!key) return;
-
-  btn.disabled = true;
-  btn.textContent = "Validating...";
-
-  const valid = await validateGroqKey(key);
-
-  if (valid) {
-    groqApiKey = key;
-    await chrome.storage.local.set({ groqApiKey });
-    btn.textContent = "Saved!";
-    setTimeout(() => {
-      btn.textContent = "Save Key";
-      btn.disabled = false;
-    }, 1500);
-  } else {
-    btn.textContent = "Invalid key";
-    setTimeout(() => {
-      btn.textContent = "Save Key";
-      btn.disabled = false;
-    }, 2000);
-  }
 }
 
 // ─── Projects ───
@@ -405,13 +287,13 @@ async function publishArticle() {
   errorEl.style.display = "none";
 
   if (!authToken) {
-    showError(errorEl, "Not authenticated. Please login.");
+    showError(errorEl, "Not authenticated. Please login on the website.");
     resetPublishBtn(btn);
     return;
   }
 
   if (!groqApiKey) {
-    showError(errorEl, "No Groq API key. Add one in Settings.");
+    showError(errorEl, "No Groq API key. Set one in website Settings.");
     resetPublishBtn(btn);
     return;
   }
@@ -557,31 +439,10 @@ function resetPublishBtn(btn) {
 // ─── Event Binding ───
 
 function bindEvents() {
-  // Auth tabs
-  document.querySelectorAll(".auth-tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      document
-        .querySelectorAll(".auth-tab")
-        .forEach((t) => t.classList.remove("active"));
-      tab.classList.add("active");
-      authMode = tab.dataset.tab;
-      document.getElementById("auth-submit-btn").textContent =
-        authMode === "login" ? "Login" : "Register";
-      document.getElementById("auth-status").style.display = "none";
-    });
-  });
-
-  // Auth submit
+  // Open Login Page button
   document
-    .getElementById("auth-submit-btn")
-    .addEventListener("click", handleAuth);
-
-  // Enter key on auth form
-  ["auth-username", "auth-password", "auth-groq-key"].forEach((id) => {
-    document.getElementById(id).addEventListener("keydown", (e) => {
-      if (e.key === "Enter") handleAuth();
-    });
-  });
+    .getElementById("open-login-btn")
+    .addEventListener("click", openLoginPage);
 
   // Logout
   document.getElementById("logout-btn").addEventListener("click", logout);
@@ -633,8 +494,4 @@ function bindEvents() {
     .getElementById("publish-btn")
     .addEventListener("click", publishArticle);
 
-  // Save Groq key
-  document
-    .getElementById("save-groq-key-btn")
-    .addEventListener("click", saveGroqKey);
 }

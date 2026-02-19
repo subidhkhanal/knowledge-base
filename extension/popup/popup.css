@@ -93,41 +93,17 @@ h1 {
   border-color: #cbd5e1;
 }
 
-/* ─── Auth Tabs ─── */
+/* ─── Login Prompt (Auth View) ─── */
 
-.auth-tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 12px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
+.login-prompt {
+  text-align: center;
+  padding: 8px 0 4px;
 }
 
-.auth-tab {
-  flex: 1;
-  padding: 8px;
-  border: none;
-  background: #f1f5f9;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
+.login-prompt-text {
+  font-size: 14px;
   color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.auth-tab:first-child {
-  border-right: 1px solid #e2e8f0;
-}
-
-.auth-tab.active {
-  background: #0ea5e9;
-  color: #fff;
-}
-
-.auth-tab:hover:not(.active) {
-  background: #e2e8f0;
+  margin-bottom: 4px;
 }
 
 /* ─── Status indicator ─── */

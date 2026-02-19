@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Vollkorn } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
+import { Providers } from "./Providers";
 import "./globals.css";
 
 const vollkorn = Vollkorn({
@@ -27,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${vollkorn.variable} ${geistMono.variable}`}>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

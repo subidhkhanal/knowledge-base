@@ -70,7 +70,7 @@ async def register(user: UserCreate):
         await db.close()
 
 
-@app.post("/api/auth/login", response_model=Token)
+@app.post("/api/auth/login")
 async def login(user: UserLogin):
     db = await get_db()
     try:
@@ -78,7 +78,7 @@ async def login(user: UserLogin):
         if not db_user or not AuthService.verify_password(user.password, db_user["hashed_password"]):
             raise HTTPException(status_code=401, detail="Invalid username or password")
         token = AuthService.create_token(db_user["id"], db_user["username"])
-        return Token(access_token=token)
+        return {"access_token": token, "token_type": "bearer", "user_id": db_user["id"], "username": db_user["username"]}
     finally:
         await db.close()
 

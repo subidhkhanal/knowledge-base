@@ -10,7 +10,8 @@
     "https://chat.openai.com/*",
     "https://pkb-backend.onrender.com/*",
     "https://api.groq.com/*",
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "http://localhost:3000/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -35,6 +36,11 @@
     {
       "matches": ["<all_urls>"],
       "js": ["lib/Readability.js", "article-scraper.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://localhost:3000/*"],
+      "js": ["content-scripts/frontend-bridge.js"],
       "run_at": "document_idle"
     }
   ],
