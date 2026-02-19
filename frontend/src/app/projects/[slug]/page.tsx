@@ -28,6 +28,9 @@ function ProjectDetailContent({ slug }: { slug: string }) {
   const handleFileUpload = (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
+    if (project?.id) {
+      formData.append("project_id", String(project.id));
+    }
 
     const xhr = createXhr("POST", "/api/upload/document");
 

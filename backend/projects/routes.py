@@ -104,10 +104,9 @@ async def get_project_detail(
     documents = []
     try:
         all_sources = components["vector_store"].get_all_sources(user_id=user_id_str)
-        # Filter sources that belong to this project by checking metadata
-        # For now, documents are identified by source_type != "article"
+        # Filter documents that belong to this project by project_id metadata
         for source in all_sources:
-            if source.get("source_type") != "article":
+            if source.get("source_type") != "article" and source.get("project_id") == project["id"]:
                 documents.append(source)
     except Exception:
         pass

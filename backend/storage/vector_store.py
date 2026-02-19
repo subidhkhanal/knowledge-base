@@ -235,8 +235,10 @@ class VectorStore:
                     sources[source] = {
                         "source": source,
                         "source_type": metadata.get("source_type", "unknown"),
-                        "chunk_count": 0
+                        "chunk_count": 0,
                     }
+                    if "project_id" in metadata:
+                        sources[source]["project_id"] = int(metadata["project_id"])
                 sources[source]["chunk_count"] += 1
 
         except Exception as e:

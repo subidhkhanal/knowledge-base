@@ -3,6 +3,32 @@
 import { useState, useEffect, useCallback } from "react";
 import { useApi } from "./useApi";
 
+export function useDeleteProject() {
+  const { apiFetch } = useApi();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const deleteProject = useCallback(
+    async (slug: string) => {
+      setIsDeleting(true);
+      try {
+        const res = await apiFetch(`/api/projects/${encodeURIComponent(slug)}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to delete project");
+      } finally {
+        setIsDeleting(false);
+      }
+    },
+    [apiFetch]
+  );
+
+  return { deleteProject, isDeleting };
+}
+
 export interface ProjectListItem {
   id: number;
   slug: string;

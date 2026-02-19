@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
-import { useProjects, useCreateProject } from "@/hooks/useProjects";
+import { useProjects, useCreateProject, useDeleteProject } from "@/hooks/useProjects";
 import { useApi } from "@/hooks/useApi";
 
 function formatRelativeDate(dateStr: string): string {
@@ -24,11 +24,23 @@ function formatRelativeDate(dateStr: string): string {
 function ProjectsContent() {
   const { projects, isLoading, error, refetch } = useProjects();
   const { createProject, isCreating } = useCreateProject();
+  const { deleteProject, isDeleting } = useDeleteProject();
   const { createXhr } = useApi();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
+
+  // Close confirmation dialog on Escape
+  useEffect(() => {
+    if (!deletingSlug) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDeletingSlug(null);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [deletingSlug]);
 
   const handleFileUpload = (file: File) => {
     const formData = new FormData();
@@ -70,6 +82,17 @@ function ProjectsContent() {
     }
   };
 
+  const handleDeleteProject = async () => {
+    if (!deletingSlug) return;
+    try {
+      await deleteProject(deletingSlug);
+      setDeletingSlug(null);
+      refetch();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete project");
+    }
+  };
+
   return (
     <div className="h-screen overflow-y-auto" style={{ background: "var(--bg-primary)" }}>
       <Header onFileUpload={handleFileUpload} />
@@ -93,44 +116,19 @@ function ProjectsContent() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium cursor-pointer"
-              style={{
-                background: "var(--accent)",
-                color: "white",
-              }}
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Project
-            </button>
-            <button
-              onClick={refetch}
-              className="flex h-9 w-9 items-center justify-center rounded-lg cursor-pointer"
-              style={{
-                background: "var(--bg-secondary)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <svg
-                className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-                style={{ color: "var(--text-secondary)" }}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium cursor-pointer"
+            style={{
+              background: "var(--accent)",
+              color: "white",
+            }}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Project
+          </button>
         </div>
 
         {/* Create project form */}
@@ -331,7 +329,7 @@ function ProjectsContent() {
                     ease: [0.16, 1, 0.3, 1],
                     delay: index * 0.05,
                   }}
-                  className="group flex flex-col gap-3 rounded-xl p-5 cursor-pointer"
+                  className="group relative flex flex-col gap-3 rounded-xl p-5 cursor-pointer"
                   style={{
                     background: "var(--bg-secondary)",
                     border: "1px solid var(--border)",
@@ -344,6 +342,30 @@ function ProjectsContent() {
                     e.currentTarget.style.borderColor = "var(--border)";
                   }}
                 >
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDeletingSlug(project.slug);
+                    }}
+                    className="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-lg cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ color: "var(--text-tertiary)" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--bg-tertiary)";
+                      e.currentTarget.style.color = "var(--error)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = "var(--text-tertiary)";
+                    }}
+                    title="Delete project"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+
                   {/* Folder icon + title */}
                   <div className="flex items-start gap-3">
                     <div
@@ -401,6 +423,68 @@ function ProjectsContent() {
             ))}
           </div>
         )}
+
+        {/* Delete confirmation dialog */}
+        <AnimatePresence>
+          {deletingSlug && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: "rgba(0, 0, 0, 0.3)" }}
+              onClick={() => setDeletingSlug(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-sm rounded-xl p-5"
+                style={{
+                  background: "var(--bg-primary)",
+                  border: "1px solid var(--border)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.1)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3
+                  className="mb-2 text-sm font-semibold"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  Delete Project
+                </h3>
+                <p
+                  className="mb-5 text-sm leading-relaxed"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Are you sure you want to delete &ldquo;{projects.find((p) => p.slug === deletingSlug)?.title}&rdquo;? Articles will be unlinked but not deleted.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setDeletingSlug(null)}
+                    className="rounded-lg px-3 py-1.5 text-sm cursor-pointer"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteProject}
+                    disabled={isDeleting}
+                    className="rounded-lg px-4 py-1.5 text-sm font-medium cursor-pointer disabled:opacity-50"
+                    style={{
+                      background: "var(--error)",
+                      color: "white",
+                    }}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete Project"}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );

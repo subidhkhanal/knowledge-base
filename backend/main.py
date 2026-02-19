@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -237,6 +237,7 @@ SUPPORTED_EXTENSIONS = {
 @app.post("/api/upload/document", response_model=UploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
+    project_id: Optional[int] = Form(None),
     current_user: dict = Depends(get_optional_user),
 ):
     """Upload and process any supported document type."""
@@ -296,6 +297,11 @@ async def upload_document(
             status_code=400,
             detail=f"Text from '{file.filename}' is too short (minimum ~100 words needed for meaningful search)."
         )
+
+    # Tag chunks with project_id if provided
+    if project_id is not None:
+        for chunk in chunks:
+            chunk["project_id"] = project_id
 
     # Store in vector database
     try:
