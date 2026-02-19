@@ -1,5 +1,5 @@
 /**
- * BrainForge background service worker.
+ * Chatbot to Webpage background service worker.
  * Shows a green badge dot on supported chat pages (Claude, ChatGPT).
  */
 

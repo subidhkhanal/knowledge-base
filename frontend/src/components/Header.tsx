@@ -46,7 +46,7 @@ export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
               </svg>
             </div>
             <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              BrainForge
+              Personal Knowledge Base
             </span>
           </Link>
         </div>

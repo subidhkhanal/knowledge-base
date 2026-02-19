@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BrainForge",
+  title: "Personal Knowledge Base",
   description: "Your personal AI-powered knowledge assistant",
 };
 

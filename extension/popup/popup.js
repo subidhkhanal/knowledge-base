@@ -1,5 +1,5 @@
 /**
- * BrainForge extension popup logic.
+ * Personal Knowledge Base extension popup logic.
  * Handles: auth, scrape trigger, form interaction, and publish API call.
  */
 

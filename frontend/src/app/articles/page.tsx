@@ -151,7 +151,7 @@ function ArticlesContent() {
                   className="mb-4 text-xs"
                   style={{ color: "var(--text-tertiary)" }}
                 >
-                  Publish conversations from the BrainForge extension
+                  Publish conversations from the Chatbot to Webpage extension
                 </p>
                 <Link
                   href="/"
