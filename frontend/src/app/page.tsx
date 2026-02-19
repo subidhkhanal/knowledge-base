@@ -14,9 +14,6 @@ import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatArea } from "@/components/ChatArea";
 import { ChatInput } from "@/components/ChatInput";
-import { useBackendStatus } from "@/hooks/useBackendStatus";
-import { BackendStatusBanner } from "@/components/BackendStatusBanner";
-
 export default function Home() {
   const { apiFetch } = useApi();
   const {
@@ -31,7 +28,6 @@ export default function Home() {
     isLoaded,
   } = useChatHistory();
 
-  const { status: backendStatus, elapsedSeconds, retry: retryBackend } = useBackendStatus();
   const { toasts, addToast, removeToast, updateToast } = useToasts();
   const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
 
@@ -238,8 +234,6 @@ export default function Home() {
       </AnimatePresence>
 
       <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} onUploadClick={() => setShowUploadModal(true)} />
-
-      <BackendStatusBanner status={backendStatus} elapsedSeconds={elapsedSeconds} onRetry={retryBackend} />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
