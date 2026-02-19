@@ -28,7 +28,6 @@ async def create_articles_table():
             );
             CREATE INDEX IF NOT EXISTS idx_articles_user ON articles(user_id);
             CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
-            CREATE INDEX IF NOT EXISTS idx_articles_project ON articles(project_id);
         """)
         await db.commit()
 
@@ -38,6 +37,12 @@ async def create_articles_table():
             await db.commit()
         except Exception:
             pass  # Column already exists
+
+        # Create project_id index after migration ensures the column exists
+        await db.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_articles_project ON articles(project_id);
+        """)
+        await db.commit()
     finally:
         await db.close()
 

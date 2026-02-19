@@ -6,10 +6,13 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, List
 
-from backend.auth import get_current_user, get_optional_user
+from backend.auth import get_optional_user
 from backend.projects.models import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectDetailResponse
 from backend.projects import database as db
 from backend.articles import database as articles_db
+
+# All endpoints use get_optional_user because the frontend has no auth system.
+# This matches the pattern used by all other endpoints (upload, query, articles, etc.).
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -29,9 +32,10 @@ def generate_slug(title: str) -> str:
 @router.post("", response_model=ProjectResponse)
 async def create_project(
     request: ProjectCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_optional_user),
 ):
     """Create a new project."""
+    user_id = current_user["user_id"] if current_user else None
     slug = generate_slug(request.title)
 
     # Ensure unique slug
@@ -45,10 +49,10 @@ async def create_project(
         slug=slug,
         title=request.title,
         description=request.description,
-        user_id=current_user["user_id"],
+        user_id=user_id,
     )
 
-    project = await db.get_project_by_slug(slug, current_user["user_id"])
+    project = await db.get_project_by_slug(slug)
     return ProjectResponse(
         id=project["id"],
         slug=project["slug"],
@@ -63,10 +67,11 @@ async def create_project(
 
 @router.get("")
 async def list_projects(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_optional_user),
 ):
-    """List all projects for the current user."""
-    projects = await db.get_all_projects(current_user["user_id"])
+    """List all projects (optionally filtered by user)."""
+    user_id = current_user["user_id"] if current_user else None
+    projects = await db.get_all_projects(user_id)
 
     # Get document counts from Pinecone for each project
     components = _get_components()
@@ -81,10 +86,11 @@ async def list_projects(
 @router.get("/{slug}")
 async def get_project_detail(
     slug: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_optional_user),
 ):
     """Get a project with its articles and documents."""
-    project = await db.get_project_by_slug(slug, current_user["user_id"])
+    user_id = current_user["user_id"] if current_user else None
+    project = await db.get_project_by_slug(slug, user_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -93,7 +99,7 @@ async def get_project_detail(
 
     # Get documents from Pinecone tagged with this project
     components = _get_components()
-    user_id_str = str(current_user["user_id"])
+    user_id_str = str(user_id) if user_id else None
 
     documents = []
     try:
@@ -119,19 +125,20 @@ async def get_project_detail(
 async def update_project(
     slug: str,
     request: ProjectUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_optional_user),
 ):
     """Update a project's title and description."""
+    user_id = current_user["user_id"] if current_user else None
     updated = await db.update_project(
         slug=slug,
         title=request.title,
         description=request.description,
-        user_id=current_user["user_id"],
+        user_id=user_id,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    project = await db.get_project_by_slug(slug, current_user["user_id"])
+    project = await db.get_project_by_slug(slug, user_id)
     return ProjectResponse(
         id=project["id"],
         slug=project["slug"],
@@ -145,10 +152,11 @@ async def update_project(
 @router.delete("/{slug}")
 async def delete_project(
     slug: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_optional_user),
 ):
     """Delete a project and unlink its articles."""
-    project_id = await db.delete_project(slug, current_user["user_id"])
+    user_id = current_user["user_id"] if current_user else None
+    project_id = await db.delete_project(slug, user_id)
     if project_id is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -159,11 +167,9 @@ async def delete_project(
 async def project_scoped_query(
     slug: str,
     http_request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_optional_user),
 ):
     """Query the knowledge base scoped to a specific project."""
-    from pydantic import BaseModel
-    from typing import Optional, List as TypingList
 
     # Parse request body
     body = await http_request.json()
@@ -176,13 +182,14 @@ async def project_scoped_query(
     chat_history = body.get("chat_history")
 
     # Verify project exists
-    project = await db.get_project_by_slug(slug, current_user["user_id"])
+    user_id = current_user["user_id"] if current_user else None
+    project = await db.get_project_by_slug(slug, user_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     project_id = project["id"]
     components = _get_components()
-    user_id_str = str(current_user["user_id"])
+    user_id_str = str(user_id) if user_id else None
     groq_api_key = http_request.headers.get("x-groq-api-key")
 
     # Get article titles for this project (used as Pinecone source filter)
