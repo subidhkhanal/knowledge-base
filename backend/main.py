@@ -27,6 +27,7 @@ from backend.conversations import ConversationService
 from backend.articles import articles_router
 from backend.projects import projects_router
 from backend.documents import documents_router
+from backend.research import research_router
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -48,6 +49,7 @@ app.add_middleware(
 app.include_router(articles_router)
 app.include_router(projects_router)
 app.include_router(documents_router)
+app.include_router(research_router)
 
 
 @app.on_event("startup")
