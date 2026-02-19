@@ -350,7 +350,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                       );
 
                       return document.document_id ? (
-                        <Link key={document.source} href={`/reader/${document.document_id}`}>
+                        <Link key={document.source} href={`/projects/${slug}/documents/${document.document_id}`}>
                           {card}
                         </Link>
                       ) : (

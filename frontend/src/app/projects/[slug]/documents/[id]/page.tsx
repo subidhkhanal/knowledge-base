@@ -14,7 +14,7 @@ const EBOOK_EXTENSIONS = [".epub", ".mobi", ".azw", ".azw3", ".fb2", ".cbz"];
 const PDF_EXTENSIONS = [".pdf"];
 const TEXT_EXTENSIONS = [".txt", ".md", ".markdown", ".html", ".htm", ".docx", ".doc"];
 
-function ReaderContent({ id }: { id: number }) {
+function DocumentReaderContent({ slug, id }: { slug: string; id: number }) {
   const { document, isLoading, error } = useDocument(id);
 
   const ext = document?.extension || "";
@@ -31,16 +31,16 @@ function ReaderContent({ id }: { id: number }) {
         className="flex items-center gap-3 px-6 py-3 shrink-0"
         style={{ borderBottom: "1px solid var(--border)" }}
       >
-        <button
-          onClick={() => history.back()}
-          className="inline-flex items-center gap-1.5 text-sm cursor-pointer hover:opacity-70"
+        <Link
+          href={`/projects/${slug}`}
+          className="inline-flex items-center gap-1.5 text-sm hover:opacity-70"
           style={{ color: "var(--text-secondary)" }}
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
           </svg>
-          Back
-        </button>
+          Back to Project
+        </Link>
         {document && (
           <>
             <span className="h-4 w-px" style={{ background: "var(--border)" }} />
@@ -68,8 +68,8 @@ function ReaderContent({ id }: { id: number }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-sm mb-1" style={{ color: "var(--text-primary)" }}>{error}</p>
-            <Link href="/projects" className="text-xs underline" style={{ color: "var(--accent)" }}>
-              Back to Projects
+            <Link href={`/projects/${slug}`} className="text-xs underline" style={{ color: "var(--accent)" }}>
+              Back to Project
             </Link>
           </div>
         )}
@@ -93,11 +93,11 @@ function ReaderContent({ id }: { id: number }) {
   );
 }
 
-export default function ReaderPage({
+export default function DocumentReaderPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string; id: string }>;
 }) {
-  const { id } = use(params);
-  return <ReaderContent id={parseInt(id, 10)} />;
+  const { slug, id } = use(params);
+  return <DocumentReaderContent slug={slug} id={parseInt(id, 10)} />;
 }
