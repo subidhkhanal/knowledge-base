@@ -8,7 +8,7 @@ import { useApi } from "@/hooks/useApi";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { ChatArea } from "./ChatArea";
 import { ChatInput } from "./ChatInput";
-import type { ChatMode } from "./ChatInput";
+import type { ChatMode, ResearchQuality } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import type { Source } from "@/types/chat";
 
@@ -71,6 +71,7 @@ export function ChatWidget() {
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const [mode, setMode] = useState<ChatMode>("rag");
+  const [researchQuality, setResearchQuality] = useState<ResearchQuality>("standard");
 
   const tokenQueueRef = useRef<
     { content: string; type: string; sources?: Source[]; provider?: string }[]
@@ -173,7 +174,7 @@ export function ChatWidget() {
   };
 
   const handleResearchSubmit = async (inputText: string, assistantId: string) => {
-    const body: Record<string, string> = { topic: inputText };
+    const body: Record<string, string> = { topic: inputText, quality: researchQuality };
     if (slug) body.project_slug = slug;
 
     try {
@@ -526,6 +527,8 @@ export function ChatWidget() {
                   placeholder={getPillPlaceholder(pathname)}
                   mode={mode}
                   onModeChange={setMode}
+                  researchQuality={researchQuality}
+                  onResearchQualityChange={setResearchQuality}
                 />
               </div>
             </div>

@@ -34,10 +34,19 @@ def extract_tags(plan: dict, topic: str) -> list:
     return tags[:10]
 
 
+# Quality presets: controls subtopic count and word targets
+QUALITY_PRESETS = {
+    "quick": {"subtopics": "4-6", "min_subtopics": 3, "word_scale": 0.3},
+    "standard": {"subtopics": "10-15", "min_subtopics": 5, "word_scale": 1.0},
+    "deep": {"subtopics": "15-20", "min_subtopics": 8, "word_scale": 1.8},
+}
+
+
 def run_research_pipeline(
     topic: str,
     groq_api_key: Optional[str] = None,
     tavily_api_key: Optional[str] = None,
+    quality: str = "standard",
     progress_callback: Optional[Callable] = None,
     query_engine: Any = None,
     user_id: Optional[str] = None,
@@ -53,6 +62,7 @@ def run_research_pipeline(
         topic: The research topic
         groq_api_key: Optional user-provided Groq key
         tavily_api_key: Optional user-provided Tavily key
+        quality: "quick", "standard", or "deep"
         progress_callback: Optional callable(phase, step, total, message)
         query_engine: Optional QueryEngine for PKB search (knowledge flywheel)
         user_id: Optional user ID for PKB data isolation
@@ -61,12 +71,18 @@ def run_research_pipeline(
         dict with title, subtitle, slug, content_markdown, tags, word_count, etc.
     """
     total_phases = 4
+    preset = QUALITY_PRESETS.get(quality, QUALITY_PRESETS["standard"])
 
     # --- Phase 1: Plan ---
     if progress_callback:
         progress_callback("planning", 1, total_phases, "Planning research angles...")
 
-    plan = create_research_plan(topic, groq_api_key=groq_api_key)
+    plan = create_research_plan(
+        topic,
+        groq_api_key=groq_api_key,
+        subtopic_range=preset["subtopics"],
+        min_subtopics=preset["min_subtopics"],
+    )
 
     if progress_callback:
         progress_callback(
@@ -126,6 +142,7 @@ def run_research_pipeline(
     article_markdown = write_article(
         plan, analysis, research_bank,
         groq_api_key=groq_api_key,
+        word_scale=preset["word_scale"],
         progress_callback=writing_progress,
     )
 

@@ -27,6 +27,7 @@ def _get_components():
 class ResearchRequest(BaseModel):
     topic: str = Field(..., min_length=3, max_length=500)
     project_slug: Optional[str] = None
+    quality: Optional[str] = "standard"  # "quick", "standard", "deep"
 
 
 @router.post("/stream")
@@ -85,6 +86,7 @@ async def stream_research(
                     topic=request.topic,
                     groq_api_key=groq_api_key,
                     tavily_api_key=tavily_api_key,
+                    quality=request.quality or "standard",
                     progress_callback=progress_callback,
                     query_engine=qe,
                     user_id=user_id_str,

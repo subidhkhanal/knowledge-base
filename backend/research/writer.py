@@ -32,10 +32,14 @@ def write_article(
     analysis: dict,
     research_bank: list,
     groq_api_key: Optional[str] = None,
+    word_scale: float = 1.0,
     progress_callback: Optional[Callable] = None,
 ) -> str:
     """
     Write the full article section by section.
+
+    Args:
+        word_scale: Multiplier for target word counts (0.3=quick, 1.0=standard, 1.8=deep)
 
     Returns: Complete article in Markdown.
     """
@@ -49,9 +53,14 @@ def write_article(
     # Fallback: create briefs from outline if analysis didn't produce them
     if not section_briefs:
         section_briefs = [
-            {"section_title": s, "key_points": [], "target_words": 1500}
+            {"section_title": s, "key_points": [], "target_words": int(1500 * word_scale)}
             for s in plan["outline"]
         ]
+
+    # Scale target words in each brief
+    if word_scale != 1.0:
+        for brief in section_briefs:
+            brief["target_words"] = int(brief.get("target_words", 1500) * word_scale)
 
     total_sections = len(section_briefs)
     sections_written = []

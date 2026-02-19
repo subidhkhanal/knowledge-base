@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 
 export type ChatMode = "rag" | "llm" | "research";
+export type ResearchQuality = "quick" | "standard" | "deep";
 
 interface ChatInputProps {
   onSubmit: (message: string) => void;
@@ -11,6 +12,8 @@ interface ChatInputProps {
   placeholder?: string;
   mode?: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  researchQuality?: ResearchQuality;
+  onResearchQualityChange?: (quality: ResearchQuality) => void;
 }
 
 const modes: { key: ChatMode; label: string; icon: ChatMode }[] = [
@@ -44,7 +47,13 @@ function ModeIcon({ type, className }: { type: ChatMode; className?: string }) {
   );
 }
 
-export function ChatInput({ onSubmit, isLoading, compact, placeholder, mode, onModeChange }: ChatInputProps) {
+const qualityOptions: { key: ResearchQuality; label: string; desc: string }[] = [
+  { key: "quick", label: "Quick", desc: "~3 min" },
+  { key: "standard", label: "Standard", desc: "~8 min" },
+  { key: "deep", label: "Deep", desc: "~20 min" },
+];
+
+export function ChatInput({ onSubmit, isLoading, compact, placeholder, mode, onModeChange, researchQuality, onResearchQualityChange }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -89,6 +98,39 @@ export function ChatInput({ onSubmit, isLoading, compact, placeholder, mode, onM
               >
                 <ModeIcon type={m.icon} className="h-3.5 w-3.5" />
                 {m.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Research quality selector */}
+        {mode === "research" && researchQuality && onResearchQualityChange && (
+          <div className="flex items-center gap-1 mb-2">
+            <span className="text-[10px] mr-1" style={{ color: "var(--text-tertiary)" }}>Depth:</span>
+            {qualityOptions.map((q) => (
+              <button
+                key={q.key}
+                type="button"
+                onClick={() => onResearchQualityChange(q.key)}
+                className="rounded-md px-2 py-0.5 text-[10px] font-medium cursor-pointer transition-all duration-150"
+                style={{
+                  background: researchQuality === q.key ? "var(--accent-subtle)" : "transparent",
+                  color: researchQuality === q.key ? "var(--accent)" : "var(--text-tertiary)",
+                  border: researchQuality === q.key ? "1px solid var(--border-accent)" : "1px solid transparent",
+                }}
+                onMouseEnter={(e) => {
+                  if (researchQuality !== q.key) {
+                    e.currentTarget.style.background = "var(--bg-secondary)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (researchQuality !== q.key) {
+                    e.currentTarget.style.background = "transparent";
+                  }
+                }}
+                title={q.desc}
+              >
+                {q.label}
               </button>
             ))}
           </div>

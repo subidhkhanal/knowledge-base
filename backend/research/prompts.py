@@ -22,7 +22,7 @@ EVERY possible angle:
 Output a JSON object with:
 1. "title" — A compelling, magazine-quality title (not generic)
 2. "subtitle" — A one-line hook
-3. "subtopics" — Array of 10-15 subtopics, each with:
+3. "subtopics" — Array of {subtopic_range} subtopics, each with:
    - "heading": Section title
    - "angle": What specifically to research about this
    - "search_queries": 3-5 specific search queries to find information

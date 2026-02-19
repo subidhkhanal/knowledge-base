@@ -25,13 +25,20 @@ def _rate_limited_sleep():
     _last_groq_call = time.time()
 
 
-def create_research_plan(topic: str, groq_api_key: Optional[str] = None) -> dict:
+def create_research_plan(
+    topic: str,
+    groq_api_key: Optional[str] = None,
+    subtopic_range: str = "10-15",
+    min_subtopics: int = 5,
+) -> dict:
     """
     Turn a topic into a structured research plan.
 
     Args:
         topic: The research topic string
         groq_api_key: Optional user-provided key (BYOK)
+        subtopic_range: e.g. "4-6", "10-15", "15-20"
+        min_subtopics: Minimum subtopics required for validation
 
     Returns:
         dict with keys: title, subtitle, subtopics, outline, tone
@@ -48,7 +55,10 @@ def create_research_plan(topic: str, groq_api_key: Optional[str] = None) -> dict
         model=GROQ_MODEL,
         messages=[{
             "role": "user",
-            "content": PLANNER_PROMPT.format(topic=topic),
+            "content": PLANNER_PROMPT.format(
+                topic=topic,
+                subtopic_range=subtopic_range,
+            ),
         }],
         temperature=0.7,
         max_tokens=4000,
@@ -59,9 +69,10 @@ def create_research_plan(topic: str, groq_api_key: Optional[str] = None) -> dict
 
     # Validate minimum structure
     subtopics = plan.get("subtopics", [])
-    if len(subtopics) < 5:
+    if len(subtopics) < min_subtopics:
         raise ValueError(
-            f"Planner produced only {len(subtopics)} subtopics (need at least 5)"
+            f"Planner produced only {len(subtopics)} subtopics "
+            f"(need at least {min_subtopics})"
         )
     if "outline" not in plan:
         raise ValueError("Planner did not produce an outline")
