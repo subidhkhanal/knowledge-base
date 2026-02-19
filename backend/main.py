@@ -24,6 +24,7 @@ from backend.routing import QueryRouter, RouteHandlers
 from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_user, get_optional_user
 from backend.auth.database import init_db, get_db
 from backend.conversations import ConversationService
+from backend.articles import articles_router
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -31,19 +32,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS for frontend
+# CORS for frontend + Chrome extension
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://personal-assistant-olive.vercel.app",
-        FRONTEND_URL,
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount article publishing routes
+app.include_router(articles_router)
 
 
 @app.on_event("startup")
@@ -152,7 +152,8 @@ def get_components():
         "vector_store": vector_store,
         "query_engine": query_engine,
         "query_router": query_router,
-        "route_handlers": route_handlers
+        "route_handlers": route_handlers,
+        "bm25_index": bm25_index,
     }
 
 

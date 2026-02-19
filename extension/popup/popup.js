@@ -1,18 +1,20 @@
 /**
  * BrainForge extension popup logic.
- * Handles: scrape trigger, form interaction, and publish API call.
+ * Handles: auth, scrape trigger, form interaction, and publish API call.
  */
 
 const DEFAULT_BACKEND = "https://pkb-backend.onrender.com";
 const DEFAULT_FRONTEND = "https://personal-assistant-olive.vercel.app";
 
 let scrapedData = null;
+let authToken = null;
 
 // ─── Initialization ───
 
 document.addEventListener("DOMContentLoaded", async () => {
   const settings = await loadSettings();
   applySettings(settings);
+  await checkAuth(settings.backendUrl);
   await triggerScrape();
   bindEvents(settings.backendUrl);
 });
@@ -22,7 +24,9 @@ async function loadSettings() {
   const stored = await chrome.storage.local.get([
     "backendUrl",
     "frontendUrl",
+    "authToken",
   ]);
+  authToken = stored.authToken || null;
   return {
     backendUrl: stored.backendUrl || DEFAULT_BACKEND,
     frontendUrl: stored.frontendUrl || DEFAULT_FRONTEND,
@@ -35,6 +39,72 @@ function applySettings(settings) {
   document.getElementById("frontend-url").value = settings.frontendUrl;
   document.getElementById("view-kb-link").href =
     settings.frontendUrl + "/articles";
+}
+
+// ─── Authentication ───
+
+/** Check if we have a stored auth token and update the UI. */
+async function checkAuth(backendUrl) {
+  const authStatusEl = document.getElementById("auth-status");
+
+  if (!authToken) {
+    showStatus(authStatusEl, "Not logged in — open Settings to login", "error");
+    return;
+  }
+
+  showStatus(authStatusEl, "Logged in", "success");
+}
+
+/** Login with username/password and store the JWT token. */
+async function login(backendUrl) {
+  const loginBtn = document.getElementById("login-btn");
+  const authStatusEl = document.getElementById("auth-status");
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value.trim();
+
+  if (!username || !password) {
+    showStatus(authStatusEl, "Enter username and password", "error");
+    return;
+  }
+
+  loginBtn.disabled = true;
+  loginBtn.textContent = "Logging in...";
+
+  try {
+    const resp = await fetch(`${backendUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    authToken = data.access_token;
+    await chrome.storage.local.set({ authToken });
+
+    showStatus(authStatusEl, "Logged in", "success");
+
+    // Clear password field
+    document.getElementById("password").value = "";
+  } catch (e) {
+    showStatus(authStatusEl, `Login failed: ${e.message}`, "error");
+  }
+
+  loginBtn.disabled = false;
+  loginBtn.textContent = "Login";
+}
+
+/** Build headers with auth token if available. */
+function getAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  return headers;
 }
 
 // ─── Scraping ───
@@ -116,6 +186,11 @@ function bindEvents(backendUrl) {
     .getElementById("publish-btn")
     .addEventListener("click", () => publishArticle(backendUrl));
 
+  // Login button
+  document
+    .getElementById("login-btn")
+    .addEventListener("click", () => login(backendUrl));
+
   // Save settings button
   document
     .getElementById("save-settings")
@@ -134,6 +209,13 @@ async function publishArticle(backendUrl) {
   btn.textContent = "Publishing...";
   resultEl.style.display = "none";
   errorEl.style.display = "none";
+
+  // Validate auth
+  if (!authToken) {
+    showError(errorEl, "Please login first (open Settings)");
+    resetPublishBtn(btn);
+    return;
+  }
 
   // Validate title
   const title = document.getElementById("title").value.trim();
@@ -166,13 +248,18 @@ async function publishArticle(backendUrl) {
     payload.update_slug = document.getElementById("existing-slug").value;
   }
 
-  // Send to backend
+  // Send to backend with timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout (LLM structuring can be slow)
+
   try {
     const resp = await fetch(`${backendUrl}/api/publish`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!resp.ok) {
       const errBody = await resp.json().catch(() => ({}));
@@ -189,7 +276,11 @@ async function publishArticle(backendUrl) {
       `<a href="${articleUrl}" target="_blank">View Article</a>`;
     resultEl.style.display = "block";
   } catch (e) {
-    showError(errorEl, e.message);
+    if (e.name === "AbortError") {
+      showError(errorEl, "Request timed out — backend may be starting up. Try again.");
+    } else {
+      showError(errorEl, e.message);
+    }
   }
 
   resetPublishBtn(btn);
@@ -212,7 +303,9 @@ async function loadExistingArticles(backendUrl) {
   select.innerHTML = '<option value="">Loading...</option>';
 
   try {
-    const resp = await fetch(`${backendUrl}/api/articles`);
+    const resp = await fetch(`${backendUrl}/api/articles`, {
+      headers: getAuthHeaders(),
+    });
     const data = await resp.json();
 
     if (data.articles && data.articles.length > 0) {

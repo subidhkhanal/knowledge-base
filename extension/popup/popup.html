@@ -44,9 +44,21 @@
     <div id="result" class="result"></div>
     <div id="error" class="error-box"></div>
 
+    <!-- Auth status -->
+    <div class="status" id="auth-status">Not logged in</div>
+
     <!-- Collapsible settings -->
     <details>
       <summary>Settings</summary>
+
+      <label for="username">Username</label>
+      <input type="text" id="username" placeholder="Your KB username" />
+
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Your KB password" />
+
+      <button class="btn primary" id="login-btn">Login</button>
+
       <label for="backend-url">Backend URL</label>
       <input
         type="text"

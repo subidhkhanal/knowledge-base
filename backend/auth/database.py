@@ -39,3 +39,7 @@ async def init_db():
     """)
     await db.commit()
     await db.close()
+
+    # Create articles table (separate module manages it)
+    from backend.articles.database import create_articles_table
+    await create_articles_table()

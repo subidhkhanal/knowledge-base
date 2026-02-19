@@ -7,7 +7,9 @@
   "host_permissions": [
     "https://claude.ai/*",
     "https://chatgpt.com/*",
-    "https://chat.openai.com/*"
+    "https://chat.openai.com/*",
+    "https://pkb-backend.onrender.com/*",
+    "http://localhost:8000/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
