@@ -15,6 +15,16 @@ logger = logging.getLogger(__name__)
 # Shared rate limiter (same global as planner — imported here for the same pattern)
 _last_groq_call = 0.0
 
+# Groq free tier: 12K TPM for llama-3.3-70b-versatile
+# Total tokens = input tokens + max_tokens (requested output)
+_TPM_BUDGET = 11000  # safe margin under 12K
+_MAX_OUTPUT_TOKENS = 3500
+
+
+def _estimate_tokens(text: str) -> int:
+    """Conservative token estimate (1 token ≈ 3 chars for mixed content)."""
+    return len(text) // 3
+
 
 def _rate_limited_sleep():
     global _last_groq_call
@@ -43,17 +53,37 @@ def analyze_research(
     key = groq_api_key or GROQ_API_KEY
     client = Groq(api_key=key)
 
-    formatted_research = _format_research_bank(research_bank)
-
-    # Truncate to fit context (Llama 3.3 70B has 128K context)
-    if len(formatted_research) > 80000:
-        formatted_research = (
-            formatted_research[:80000] + "\n\n[Research truncated for length]"
-        )
-
     outline_text = "\n".join(
         f"{i + 1}. {section}" for i, section in enumerate(plan["outline"])
     )
+
+    # Build the prompt shell (without research) to measure its token cost
+    prompt_shell = ANALYZER_PROMPT.format(
+        title=plan["title"],
+        outline=outline_text,
+        research_bank="",
+    )
+    shell_tokens = _estimate_tokens(prompt_shell)
+
+    # Token budget remaining for the research bank
+    research_token_budget = _TPM_BUDGET - shell_tokens - _MAX_OUTPUT_TOKENS
+    research_char_budget = max(research_token_budget * 3, 3000)  # floor at 3K chars
+
+    logger.info(
+        "Analyzer budget: %d TPM, %d shell tokens, %d output tokens → "
+        "%d tokens (%d chars) for research",
+        _TPM_BUDGET, shell_tokens, _MAX_OUTPUT_TOKENS,
+        research_token_budget, research_char_budget,
+    )
+
+    formatted_research = _format_research_bank(research_bank)
+
+    # Truncate to fit the token budget
+    if len(formatted_research) > research_char_budget:
+        formatted_research = (
+            formatted_research[:research_char_budget]
+            + "\n\n[Research truncated to fit token budget]"
+        )
 
     _rate_limited_sleep()
 
@@ -68,7 +98,7 @@ def analyze_research(
             ),
         }],
         temperature=0.3,
-        max_tokens=8000,
+        max_tokens=_MAX_OUTPUT_TOKENS,
         response_format={"type": "json_object"},
     )
 
@@ -83,6 +113,7 @@ def _format_research_bank(research_bank: list) -> str:
 
     Separates PKB (existing knowledge) and web findings so the analyzer
     knows what the user already had vs what's new from the web.
+    Uses compressed formatting to stay within Groq free-tier token limits.
     """
     formatted = ""
     for subtopic in research_bank:
@@ -92,26 +123,26 @@ def _format_research_bank(research_bank: list) -> str:
         pkb_count = subtopic.get("pkb_sources", 0)
         web_count = subtopic.get("web_sources", 0)
         if pkb_count > 0:
-            formatted += f"(Found {pkb_count} existing PKB sources + {web_count} web sources)\n\n"
+            formatted += f"(PKB: {pkb_count}, Web: {web_count})\n\n"
         else:
             formatted += "\n"
 
         for finding in subtopic["findings"]:
             source_type = finding.get("source_type", "web")
             if source_type == "pkb":
-                formatted += "**FROM YOUR EXISTING KNOWLEDGE BASE:**\n"
+                formatted += "**[PKB]:**\n"
             else:
-                formatted += f"Query: {finding['query']}\n"
+                formatted += f"Q: {finding['query']}\n"
 
-            if finding.get("tavily_answer"):
-                formatted += f"Summary: {finding['tavily_answer']}\n"
-            for result in finding.get("results", [])[:3]:
+            tavily_answer = finding.get("tavily_answer", "")
+            if tavily_answer:
+                formatted += f"Summary: {tavily_answer[:150]}\n"
+            for result in finding.get("results", [])[:2]:
                 prefix = "[PKB] " if source_type == "pkb" else ""
-                formatted += f"- {prefix}[{result['title']}]({result['url']})\n"
-                formatted += f"  {result['content'][:500]}\n"
+                formatted += f"- {prefix}{result['title']}: {result['content'][:300]}\n"
 
-        for article in subtopic.get("full_articles", []):
-            formatted += f"\nFull source: {article['url']}\n"
-            formatted += f"{article['full_content'][:2000]}\n"
+        for article in subtopic.get("full_articles", [])[:1]:
+            formatted += f"\nSource ({article['url']}):\n"
+            formatted += f"{article['full_content'][:800]}\n"
 
     return formatted

@@ -200,6 +200,9 @@ def write_article(
     sections_summary = "\n".join([
         f"- {s['title']}: {s['summary']}" for s in sections_written
     ])
+    # Cap to avoid exceeding Groq TPM limit on conclusion call
+    if len(sections_summary) > 3000:
+        sections_summary = sections_summary[:3000] + "\n[Truncated]"
 
     _rate_limited_sleep()
 
