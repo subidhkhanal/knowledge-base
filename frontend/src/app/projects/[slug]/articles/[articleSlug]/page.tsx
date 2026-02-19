@@ -19,6 +19,7 @@ const sourceConfig: Record<string, { label: string; color: string; bg: string }>
   chatgpt: { label: "ChatGPT", color: "#10b981", bg: "rgba(16, 185, 129, 0.1)" },
   web: { label: "Web", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
   paste: { label: "Pasted", color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
+  research: { label: "Research", color: "#6366f1", bg: "rgba(99, 102, 241, 0.1)" },
 };
 
 function getSourceInfo(source: string) {
