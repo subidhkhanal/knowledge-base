@@ -32,11 +32,6 @@ A personal RAG system that answers questions ONLY from your uploaded content (bo
 
 ### Backend Setup
 
-```bash
-# Clone the repository
-git clone https://github.com/ashishgautam0/personal-assistant.git
-cd personal-assistant
-
 # Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate

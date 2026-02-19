@@ -16,6 +16,8 @@ dist/
 
 # Data
 data/chromadb/
+data/*.db
+data/bm25_cache/
 *.pdf
 
 # IDE
