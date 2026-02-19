@@ -23,17 +23,6 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/*"],
-      "js": ["content-scripts/claude-scraper.js"]
-    },
-    {
-      "matches": [
-        "https://chatgpt.com/*",
-        "https://chat.openai.com/*"
-      ],
-      "js": ["content-scripts/chatgpt-scraper.js"]
-    },
-    {
       "matches": ["<all_urls>"],
       "js": ["lib/Readability.js", "article-scraper.js"],
       "run_at": "document_idle"

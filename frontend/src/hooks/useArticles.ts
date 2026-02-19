@@ -16,6 +16,7 @@ export interface ArticleListItem {
 
 export interface ArticleDetail extends ArticleListItem {
   content_markdown: string;
+  content_html?: string;
 }
 
 export function useArticles() {
@@ -56,35 +57,31 @@ export function useArticle(slug: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchArticle = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-    async function fetchArticle() {
-      setIsLoading(true);
-      setError(null);
+    try {
+      const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`);
 
-      try {
-        const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`);
-        if (cancelled) return;
-
-        if (res.ok) {
-          const data = await res.json();
-          setArticle(data);
-        } else if (res.status === 404) {
-          setError("Article not found");
-        } else {
-          setError("Failed to load article");
-        }
-      } catch {
-        if (!cancelled) setError("Failed to connect to the server");
-      } finally {
-        if (!cancelled) setIsLoading(false);
+      if (res.ok) {
+        const data = await res.json();
+        setArticle(data);
+      } else if (res.status === 404) {
+        setError("Article not found");
+      } else {
+        setError("Failed to load article");
       }
+    } catch {
+      setError("Failed to connect to the server");
+    } finally {
+      setIsLoading(false);
     }
-
-    fetchArticle();
-    return () => { cancelled = true; };
   }, [slug, apiFetch]);
 
-  return { article, isLoading, error };
+  useEffect(() => {
+    fetchArticle();
+  }, [fetchArticle]);
+
+  return { article, isLoading, error, refetch: fetchArticle };
 }

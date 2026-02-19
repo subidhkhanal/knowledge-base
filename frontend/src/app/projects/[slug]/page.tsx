@@ -24,6 +24,17 @@ function formatRelativeDate(dateStr: string): string {
   return `${Math.floor(diffDays / 365)} years ago`;
 }
 
+const sourceConfig: Record<string, { label: string; color: string; bg: string }> = {
+  claude: { label: "Claude", color: "#f59e0b", bg: "rgba(217, 119, 6, 0.1)" },
+  chatgpt: { label: "ChatGPT", color: "#10b981", bg: "rgba(16, 185, 129, 0.1)" },
+  web: { label: "Web", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
+  paste: { label: "Pasted", color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
+};
+
+function getSourceInfo(source: string) {
+  return sourceConfig[source] || { label: source, color: "#64748b", bg: "rgba(100, 116, 139, 0.1)" };
+}
+
 function ProjectDetailContent({ slug }: { slug: string }) {
   const { project, isLoading, error, refetch } = useProject(slug);
   const { toasts, addToast, removeToast, updateToast } = useToasts();
@@ -180,36 +191,21 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                         >
                           {/* Source badge */}
                           <div className="flex items-center gap-2">
-                            <span
-                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                              style={{
-                                background:
-                                  article.source === "claude"
-                                    ? "rgba(217, 119, 6, 0.1)"
-                                    : article.source === "web"
-                                      ? "rgba(59, 130, 246, 0.1)"
-                                      : "rgba(16, 185, 129, 0.1)",
-                                color:
-                                  article.source === "claude"
-                                    ? "#f59e0b"
-                                    : article.source === "web"
-                                      ? "#3b82f6"
-                                      : "#10b981",
-                              }}
-                            >
-                              <span
-                                className="h-1.5 w-1.5 rounded-full"
-                                style={{
-                                  background:
-                                    article.source === "claude"
-                                      ? "#f59e0b"
-                                      : article.source === "web"
-                                        ? "#3b82f6"
-                                        : "#10b981",
-                                }}
-                              />
-                              {article.source === "claude" ? "Claude" : article.source === "web" ? "Web" : "ChatGPT"}
-                            </span>
+                            {(() => {
+                              const src = getSourceInfo(article.source);
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                                  style={{ background: src.bg, color: src.color }}
+                                >
+                                  <span
+                                    className="h-1.5 w-1.5 rounded-full"
+                                    style={{ background: src.color }}
+                                  />
+                                  {src.label}
+                                </span>
+                              );
+                            })()}
                           </div>
 
                           {/* Title */}

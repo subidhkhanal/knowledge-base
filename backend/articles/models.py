@@ -40,12 +40,13 @@ class ArticleListItem(BaseModel):
 
 
 class ArticleDetail(BaseModel):
-    """Full article with markdown content."""
+    """Full article with markdown and/or HTML content."""
     slug: str
     title: str
     tags: List[str]
     source: str
     content_markdown: str
+    content_html: Optional[str] = None
     chunks_count: int
     conversation_length: int
     created_at: str

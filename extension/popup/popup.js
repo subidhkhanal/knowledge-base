@@ -2,16 +2,16 @@
  * Chat to Webpage extension popup logic.
  * Auth is handled on the website (localhost:3000/login).
  * The frontend-bridge content script syncs tokens to chrome.storage.local.
- * Handles: scrape (chatbot + web articles),
- * project selection, and publish.
+ *
+ * Content input:
+ * - Chatbot pages: user pastes conversation text (Ctrl+A → Ctrl+C → paste)
+ * - Web pages: auto-extracted via Readability.js
  */
 
 const BACKEND_URL = "http://localhost:8000";
 const FRONTEND_URL = "http://localhost:3000";
 
-let scrapedData = null; // Chatbot conversation data
-let webArticleData = null; // Web article data (Readability.js)
-let pageType = null; // "chatbot" | "web" | null
+let webArticleData = null;
 let authToken = null;
 let username = null;
 let groqApiKey = null;
@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (valid) {
       showMainView();
       await loadProjects();
-      await triggerScrape();
+      tryAutoExtractWebArticle();
     } else {
       authToken = null;
       await chrome.storage.local.remove("authToken");
@@ -112,7 +112,6 @@ async function loadProjects() {
           (p) => `<option value="${p.slug}">${p.title}</option>`
         )
         .join("");
-      // Pre-select "Uncategorized" if it exists
       const uncategorized = data.projects.find((p) => p.slug === "uncategorized");
       if (uncategorized) {
         select.value = uncategorized.slug;
@@ -148,11 +147,9 @@ async function createNewProject() {
 
     const project = await resp.json();
 
-    // Reload projects and select the new one
     await loadProjects();
     document.getElementById("project-select").value = project.slug;
 
-    // Hide the form
     titleInput.value = "";
     document.getElementById("new-project-form").classList.add("hidden");
   } catch (e) {
@@ -163,7 +160,7 @@ async function createNewProject() {
   btn.textContent = "Create";
 }
 
-// ─── Scraping ───
+// ─── Web Article Auto-Extract ───
 
 function isChatbotPage(url) {
   return (
@@ -173,101 +170,71 @@ function isChatbotPage(url) {
   );
 }
 
-async function triggerScrape() {
-  const statusEl = document.getElementById("scrape-status");
-  const publishBtn = document.getElementById("publish-btn");
-
-  scrapedData = null;
-  webArticleData = null;
-  pageType = null;
-
+async function tryAutoExtractWebArticle() {
   try {
     const [tab] = await chrome.tabs.query({
       active: true,
       currentWindow: true,
     });
 
-    if (!tab?.id || !tab.url) {
-      showStatus(statusEl, "No active tab found", "error");
-      return;
-    }
+    if (!tab?.id || !tab.url) return;
 
-    if (isChatbotPage(tab.url)) {
-      // Chatbot page — use existing conversation scrapers
-      pageType = "chatbot";
-      chrome.tabs.sendMessage(
-        tab.id,
-        { action: "scrapeConversation" },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            showStatus(statusEl, "Could not scrape conversation", "error");
-            return;
-          }
+    // Only auto-extract on regular web pages, not chatbot pages
+    if (isChatbotPage(tab.url)) return;
+    if (!tab.url.startsWith("https://") && !tab.url.startsWith("http://")) return;
 
-          if (response?.success && response.messages?.length > 0) {
-            scrapedData = response;
-            showStatus(
-              statusEl,
-              `${response.messages.length} messages detected (${response.source})`,
-              "success"
-            );
-            publishBtn.disabled = false;
-          } else {
-            showStatus(
-              statusEl,
-              "No conversation found on this page",
-              "error"
-            );
+    const statusEl = document.getElementById("web-article-status");
+
+    chrome.tabs.sendMessage(
+      tab.id,
+      { action: "scrapeArticle" },
+      (response) => {
+        if (chrome.runtime.lastError) return;
+
+        if (response?.success) {
+          webArticleData = response;
+          const titleInput = document.getElementById("title");
+          if (!titleInput.value) {
+            titleInput.value = response.title || "";
           }
+          const truncated = (response.title || "").substring(0, 50);
+          const suffix = (response.title || "").length > 50 ? "..." : "";
+          showStatus(statusEl, `Article detected: "${truncated}${suffix}"`, "success");
+          updatePublishButton();
         }
-      );
-    } else if (
-      tab.url.startsWith("https://") ||
-      tab.url.startsWith("http://")
-    ) {
-      // Regular web page — use Readability.js article scraper
-      pageType = "web";
-      chrome.tabs.sendMessage(
-        tab.id,
-        { action: "scrapeArticle" },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            showStatus(
-              statusEl,
-              "Could not extract article from this page",
-              "error"
-            );
-            return;
-          }
-
-          if (response?.success) {
-            webArticleData = response;
-            // Pre-fill title from article
-            const titleInput = document.getElementById("title");
-            if (!titleInput.value) {
-              titleInput.value = response.title || "";
-            }
-            showStatus(
-              statusEl,
-              `Article detected: "${(response.title || "").substring(0, 50)}${(response.title || "").length > 50 ? "..." : ""}"`,
-              "success"
-            );
-            publishBtn.disabled = false;
-          } else {
-            showStatus(
-              statusEl,
-              response?.error || "Could not extract article",
-              "error"
-            );
-          }
-        }
-      );
-    } else {
-      showStatus(statusEl, "Not on a web page", "error");
-    }
+      }
+    );
   } catch {
-    showStatus(statusEl, "Could not access page content", "error");
+    // Silently ignore — web article extraction is optional
   }
+}
+
+// ─── Paste Handling ───
+
+function onPasteInput() {
+  const textarea = document.getElementById("conversation-paste");
+  const statusEl = document.getElementById("paste-status");
+  const text = textarea.value.trim();
+
+  if (text) {
+    const charCount = text.length;
+    const sizeLabel = charCount > 10000
+      ? `${Math.round(charCount / 1000)}K chars`
+      : `${charCount} chars`;
+    showStatus(statusEl, `${sizeLabel} pasted`, "success");
+  } else {
+    statusEl.style.display = "none";
+  }
+
+  updatePublishButton();
+}
+
+function updatePublishButton() {
+  const textarea = document.getElementById("conversation-paste");
+  const btn = document.getElementById("publish-btn");
+  const hasPaste = textarea.value.trim().length > 0;
+  const hasWebArticle = webArticleData !== null;
+  btn.disabled = !(hasPaste || hasWebArticle);
 }
 
 // ─── Publish ───
@@ -316,6 +283,8 @@ async function publishArticle() {
     .map((t) => t.trim())
     .filter(Boolean);
 
+  const pastedText = document.getElementById("conversation-paste").value.trim();
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000);
 
@@ -323,14 +292,14 @@ async function publishArticle() {
     let endpoint;
     let payload;
 
-    if (pageType === "chatbot" && scrapedData) {
-      // Chatbot conversation publish
+    if (pastedText) {
+      // Pasted conversation text → publish as chatbot conversation
       endpoint = "/api/publish";
       payload = {
         title,
         tags,
-        source: scrapedData.source,
-        conversation: scrapedData.messages,
+        source: "paste",
+        conversation: [{ role: "assistant", content: pastedText }],
         project_slug: projectSlug,
       };
 
@@ -339,8 +308,8 @@ async function publishArticle() {
         payload.update_slug =
           document.getElementById("existing-slug").value;
       }
-    } else if (pageType === "web" && webArticleData) {
-      // Web article publish
+    } else if (webArticleData) {
+      // Auto-extracted web article
       endpoint = "/api/publish/web-article";
       payload = {
         title,
@@ -370,7 +339,6 @@ async function publishArticle() {
 
     const result = await resp.json();
 
-    // Build link to the article
     let articleUrl;
     if (projectSlug) {
       articleUrl = `${FRONTEND_URL}/projects/${projectSlug}/articles/${result.slug}`;
@@ -442,13 +410,15 @@ function resetPublishBtn(btn) {
 // ─── Event Binding ───
 
 function bindEvents() {
-  // Open Login Page button
   document
     .getElementById("open-login-btn")
     .addEventListener("click", openLoginPage);
 
-  // Logout
   document.getElementById("logout-btn").addEventListener("click", logout);
+
+  // Paste textarea
+  const textarea = document.getElementById("conversation-paste");
+  textarea.addEventListener("input", onPasteInput);
 
   // Project selector: new project button
   document
@@ -461,12 +431,10 @@ function bindEvents() {
       }
     });
 
-  // Create project
   document
     .getElementById("create-project-btn")
     .addEventListener("click", createNewProject);
 
-  // Cancel new project
   document
     .getElementById("cancel-project-btn")
     .addEventListener("click", () => {
@@ -474,7 +442,6 @@ function bindEvents() {
       document.getElementById("new-project-title").value = "";
     });
 
-  // Enter on new project title
   document
     .getElementById("new-project-title")
     .addEventListener("keydown", (e) => {
@@ -492,9 +459,7 @@ function bindEvents() {
     }
   });
 
-  // Publish
   document
     .getElementById("publish-btn")
     .addEventListener("click", publishArticle);
-
 }

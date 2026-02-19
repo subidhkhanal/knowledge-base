@@ -1,0 +1,603 @@
+
+Practice exercises
+Shared by Ashish
+This is a copy of a chat between Claude and Ashish. Content may include unverified or unsafe content that do not represent the views of Anthropic. Shared snapshot may contain attachments and data not displayed here.
+
+practise
+
+11 Feb
+
+Orchestrated credential retrieval and question bank integration
+Orchestrated credential retrieval and question bank integration
+
+
+
+
+
+
+
+
+
+
+
+
+Let me fetch your question bank from GitHub. First, let me read the config.
+
+
+Curated practice questions and initiated session overview
+Curated practice questions and initiated session overview
+
+
+
+
+
+
+
+
+
+Got your question bank! Here's today's session:
+
+📅 Due Today: 10 questions (all 🆕 New)
+
+#	Question	Topic
+Q8	type() return for each variable	Python Basics
+Q11	List slicing — 5 operations	Python Basics
+Q15	Dictionary basics — CRUD operations	Python Basics
+Q20	String splitting — comma, access, spaces	Python Basics
+Q9	Write check_age with guard clauses	Python Coding
+Q3	Write extract_names from list of dicts	Python Coding
+Q24	User input + try/except error handling	Error Handling
+Q6	Explain process_results and predict output	JSON/Data
+Q32	Why exponential backoff vs fixed retry?	API Integration
+Q37	Write get_last_turn(messages)	LLM Patterns
+Also coming up tomorrow: Q2 (Transformers) and Q4 (response.text vs .json())
+
+Let's start! Here's your first question:
+
+Q8 — Python Basics ⭐
+
+What does type() return for each variable?
+
+python
+a = 10
+b = 3.14
+c = "hello"
+d = [1, 2, 3]
+e = {"key": "value"}
+f = (1, 2)
+g = True
+h = None
+Give me the type for each one.
+
+int
+float
+string
+list
+dict
+tuple
+bool
+emptyvalue
+11 Feb
+Almost perfect! 7/8 correct. Two notes:
+
+c = "hello" → The exact Python type is str, not string. Minor, but in an interview saying str shows you know Python's actual type names.
+
+h = None → ❌ This is NoneType, not "emptyvalue." None is Python's special singleton object representing the absence of a value. It's its own type:
+
+python
+>>> type(None)
+<class 'NoneType'>
+None is not empty string "", not 0, not False — it's a distinct object. You'll see it a lot as default return values from functions and as placeholder values.
+
+Rate yourself: again / hard / good / easy
+
+easy
+
+11 Feb
+Got it! Q8 updated: interval → 3 days, due Feb 14, ease 2.65 ✅
+
+Q11 — Python Basics ⭐⭐
+
+Given this list:
+
+python
+nums = [10, 20, 30, 40, 50, 60, 70, 80]
+Write the slice for each:
+
+Get the first 3 elements
+Get the last 3 elements
+Get everything except the first and last
+Reverse the entire list
+Get every other element (10, 30, 50, 70)
+nums = [10, 20, 30, 40, 50, 60, 70, 80]
+print(nums[:3])
+print(nums[-3:])
+print(nums[1:-1])
+print(nums[::-1])
+print(nums[::2])
+
+11 Feb
+All 5 correct! Clean syntax, no hesitation. 💯
+
+Rate yourself: again / hard / good / easy
+
+easy
+
+11 Feb
+Q11 updated: interval → 3 days, due Feb 14, ease 2.65 ✅
+
+Q15 — Python Basics ⭐
+
+Dictionary basics — do each of these:
+
+Create a dictionary with keys "name", "age", "city" and any values
+Access the value of "name"
+Add a new key "email" with a value
+Change "city" to "Kathmandu"
+Delete the "age" key
+new = {
+    "name":"Subidh",
+    "age": 26,
+    "city": "Noida"
+}
+print(new["name"])
+new["email"] = "no@gmail.com"
+new["city"] = "kathmandu"
+new.pop(new["age"])
+print(new)
+
+11 Feb
+4/5 correct! One mistake on the delete:
+
+Line 7: new.pop(new["age"]) ❌
+
+This evaluates new["age"] first, which gives 26. So you're actually calling new.pop(26) — trying to delete a key called 26, which doesn't exist. That would throw a KeyError.
+
+Correct ways to delete:
+
+python
+new.pop("age")       # returns the removed value (26)
+del new["age"]       # deletes in place, returns nothing
+Both work. pop is useful when you want to use the deleted value, del when you just want it gone.
+
+Rate yourself: again / hard / good / easy
+
+easy
+
+11 Feb
+Q15 updated: interval → 3 days, due Feb 14, ease 2.65 ✅
+
+Q20 — Python Basics ⭐
+
+String splitting:
+
+python
+text = "apple, banana, cherry, date"
+Split by comma to get a list of fruits
+Get just the third fruit from that list
+Now try this: "hello   world   python" — split it so extra spaces don't create empty strings
+text = "apple, banana, cherry, date"
+new = text.split(",")
+# print(new[2])
+text2 = "hello   world   python"
+new2 = text2.split()
+print(new2)
+
+11 Feb
+All 3 correct! One thing worth knowing for interviews:
+
+#1: text.split(",") gives ['apple', ' banana', ' cherry', ' date'] — notice the leading spaces on banana, cherry, date. If an interviewer asks for clean output, you'd want:
+
+python
+text.split(", ")        # split by ", " instead
+# or
+[x.strip() for x in text.split(",")]  # strip each item
+#3: Using split() with no arguments is the perfect answer — it splits on any whitespace and ignores extras.
+
+Rate yourself: again / hard / good / easy
+
+easy
+
+11 Feb
+Q20 updated: interval → 3 days, due Feb 14, ease 2.65 ✅
+
+Q9 — Python Coding ⭐⭐
+
+Write a function check_age(age) that:
+
+Returns "Invalid" if age is not an integer or is negative
+Returns "Minor" if age < 18
+Returns "Adult" if age is 18 or above
+Use guard clauses (handle bad inputs first, then the main logic).
+
+def check_age(age):
+    if type(age) != "int" or age <0:
+        print("invalid")
+    elif age < 18:
+        print("minor")
+    else:
+        print("adult")
+
+age = input("Enter the age")
+check_age(age)
+
+11 Feb
+Logic structure is good — guard clause first, then the main checks. But a few issues:
+
+1. Type check is wrong ❌
+
+python
+type(age) != "int"  # comparing to a STRING "int"
+type(age) returns <class 'int'>, not the string "int". This will ALWAYS be True, so every input hits "invalid."
+
+Fix:
+
+python
+if not isinstance(age, int) or age < 0:
+isinstance() is preferred over type() in interviews because it also handles subclasses (e.g., bool is a subclass of int).
+
+2. print vs return ❌ The question said "returns." In interviews, functions should return values, not print them. This matters because with print, the caller can't use the result.
+
+3. input() always returns a string ⚠️ So check_age(age) would always receive a string like "25", never an int. You'd need:
+
+python
+age = int(input("Enter the age: "))
+But then that itself could crash — which is a good place for try/except (you'll cover that in Q24).
+
+Rate yourself: again / hard / good / easy
+
+good
+
+11 Feb
+Q9 updated: interval → 2.5 days, due Feb 13, ease 2.50 ✅
+
+Q3 — Python Coding ⭐⭐
+
+Write a function extract_names(people) that takes a list of dictionaries and returns a list of all the "name" values.
+
+python
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+
+# Expected output: ["Alice", "Bob", "Charlie"]
+add this question in the github file"A teammate wrote this function to call our scheduling API and get available slots. But it's throwing an error. Find the bug and fix it.
+python
+
+import requests
+
+def get_available_slots(date):
+    url = "https://api.leadingbird.com/slots"
+    params = {"date": date, "status": "open"}
+    
+    response = requests.get(url, data=params)
+    
+    if response.status_code == 200:
+        slots = response.json
+        return slots
+    else:
+        print(f"Error: {response.status_code}")
+        return []
+There are two bugs in this code. Can you spot them?"
+
+Show more
+12 Feb
+Got it, I'll add that as Q38. Let me update the file and push to GitHub.
+
+
+Ran 2 commands
+Ran 2 commands
+Q38 added and pushed to GitHub! It's set as 🆕 with prerequisites Q4, Q5 — so it'll unlock once those are solid.
+
+Now back to your current question:
+
+Q3 — Python Coding ⭐⭐
+
+Write extract_names(people) that returns a list of all "name" values:
+
+python
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+
+# Expected output: ["Alice", "Bob", "Charlie"]
+add this too in github file "We integrate with a bunch of third-party services — telephony, CRM, scheduling. All of them are REST APIs. Write a function make_api_call(url, method, headers=None, payload=None) that:
+1. Supports both GET and POST requests
+2. Sends headers if provided
+3. Sends payload as JSON for POST requests
+4. Returns the parsed JSON response if status code is 200
+5. If the request fails (any exception — network error, timeout, etc.), catch it and return {"error": str(the_exception)}"
+
+12 Feb
+
+Ran 2 commands
+Ran 2 commands
+Q39 added and pushed! It's 🔒 locked — requires Q4, Q5, and Q24 first (API basics + error handling foundations).
+
+Now back to your question, Subidh:
+
+Q3 — Python Coding ⭐⭐
+
+Write extract_names(people) that returns all "name" values:
+
+python
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+
+# Expected output: ["Alice", "Bob", "Charlie"]
+import json
+def process_webhook(raw_data):
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError:
+        return {"error": "Invalid JSON"}
+    event_type = data.get("event", "unknown")
+
+    if event_type == "call_completed":
+        result = {
+            "patient": data.get("caller_name", "N/A"),
+            "duration": data.get("duration_seconds", 0),
+            "status": "completed"
+        }
+    elif event_type == "call_failed":
+        result = {
+            "patient": data.get("caller_name", "N/A"),
+            "reason": data.get("failure_reason", "unknown"),
+            "status": "failed"
+        }
+    else:
+        result = {"status": "ignored", "event": event_type}
+    return result in this code why didnot we simily did data["caller_name","N/A"] will that doesnot work?
+
+Show more
+12 Feb
+Great question! No, data["caller_name", "N/A"] would not work. Here's why:
+
+data["caller_name", "N/A"] — This creates a tuple ("caller_name", "N/A") as the key. Python sees the comma inside brackets as a tuple, so it's actually doing data[("caller_name", "N/A")]. That key doesn't exist, so you get a KeyError.
+
+data["caller_name"] — This works IF the key exists. But if "caller_name" is missing, it crashes with KeyError.
+
+data.get("caller_name", "N/A") — This is the safe way. It tries to find the key, and if it's missing, returns the default value "N/A" instead of crashing.
+
+Quick demo:
+
+python
+data = {"name": "Alice"}
+
+data["name"]              # ✅ "Alice"
+data["phone"]             # ❌ KeyError
+data.get("phone", "N/A")  # ✅ "N/A" (safe fallback)
+data["phone", "N/A"]      # ❌ KeyError — looking for tuple key
+In interview code, always use .get() when a key might be missing — especially with external API data where you can't guarantee every field will be present.
+
+Now let's get back to Q3 — write extract_names(people):
+
+python
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+
+# Expected output: ["Alice", "Bob", "Charlie"]
+"One of our devs wrote this to handle incoming webhook data from a telephony provider. Tell me what this code does, step by step.
+python
+
+import json
+
+def process_webhook(raw_data):
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError:
+        return {"error": "Invalid JSON"}
+
+    event_type = data.get("event", "unknown")
+    
+    if event_type == "call_completed":
+        result = {
+            "patient": data.get("caller_name", "N/A"),
+            "duration": data.get("duration_seconds", 0),
+            "status": "completed"
+        }
+    elif event_type == "call_failed":
+        result = {
+            "patient": data.get("caller_name", "N/A"),
+            "reason": data.get("failure_reason", "unknown"),
+            "status": "failed"
+        }
+    else:
+        result = {"status": "ignored", "event": event_type}
+
+    return result" add this question in the github file too
+Show more
+12 Feb
+
+Ran 2 commands
+Ran 2 commands
+Q40 added and pushed! 🔒 Locked — requires Q4, Q6, and Q24.
+
+Your bank is now at 40 questions. Three new ones added this session (Q38, Q39, Q40) — all API integration focused.
+
+Now, back to Q3 — still waiting on this one 😄
+
+Write extract_names(people):
+
+python
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+
+# Expected output: ["Alice", "Bob", "Charlie"]
+add this question too "We have a simple patient database (just a list of dicts). Build a function search_patients(patients, **filters) that takes the patient list and any number of keyword filters, and returns only patients that match ALL the filters.
+python
+
+patients = [
+    {"name": "Alice", "age": 34, "city": "SF", "insurance": "Aetna"},
+    {"name": "Bob", "age": 45, "city": "NYC", "insurance": "BlueCross"},
+    {"name": "Charlie", "age": 34, "city": "SF", "insurance": "BlueCross"},
+    {"name": "Diana", "age": 29, "city": "LA", "insurance": "Aetna"},
+]
+It should work like this:
+python
+
+search_patients(patients, city="SF")
+# → [Alice, Charlie]
+
+search_patients(patients, city="SF", insurance="BlueCross")
+# → [Charlie]
+
+search_patients(patients, age=50)
+# → []"
+Show more
+12 Feb
+
+Ran 2 commands
+Ran 2 commands
+Q41 added and pushed! 🔒 Locked — requires Q15 (dict basics) and Q9 (guard clauses). Bank is now at 41 questions.
+
+Subidh, that's 4 questions added this session. Let's keep the practice momentum going — Q3 is still on deck:
+
+Write extract_names(people):
+
+python
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+
+# Expected output: ["Alice", "Bob", "Charlie"]
+what is the difference between .get("phone","n/a") and .get("phone")
+
+12 Feb
+Both try to find the key "phone" in the dictionary. The difference is what happens when the key doesn't exist:
+
+.get("phone", "N/A") → returns "N/A" as the fallback
+
+.get("phone") → returns None (the default fallback when you don't specify one)
+
+python
+data = {"name": "Alice"}
+
+data.get("phone", "N/A")   # "N/A"
+data.get("phone")           # None
+Use the two-argument version when you want a meaningful default (like "N/A", 0, []). Use the one-argument version when you're okay with None — for example, when checking if a key exists:
+
+python
+if data.get("phone"):
+    # do something with phone
+Now — Q3 is waiting for you! Write extract_names(people). 😄
+
+ok, let us do q3
+
+12 Feb
+Go for it! Here it is again:
+
+python
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+
+# Expected output: ["Alice", "Bob", "Charlie"]
+Write extract_names(people).
+
+people = [
+    {"name": "Alice", "age": 30},
+    {"name": "Bob", "age": 25},
+    {"name": "Charlie", "age": 35}
+]
+# Expected output: ["Alice", "Bob", "Charlie"]
+person = []
+for item in people:
+    person.append(item["name"])
+
+print(person)
+
+12 Feb
+Correct! Clean and clear logic. 💯
+
+One thing — in interviews, you could also write this as a one-liner using list comprehension:
+
+python
+person = [item["name"] for item in people]
+Both approaches are valid. The loop version shows clear thinking, the comprehension version shows you know Pythonic style. Worth having both in your toolkit.
+
+Also, since this is a function question, wrapping it would be even better:
+
+python
+def extract_names(people):
+    return [item["name"] for item in people]
+Rate yourself: again / hard / good / easy
+
+easy
+
+12 Feb
+Q3 updated: interval → 3 days, due Feb 14, ease 2.65 ✅
+
+Q24 — Error Handling ⭐
+
+Write a program that:
+
+Asks the user for a number using input()
+Doubles it and prints the result
+If they enter something that's not a number, catch the error and print "Please enter a valid number"
+i forgot, i thought the syntax was notainstance or ainstance, what was that?
+
+12 Feb
+It's isinstance() — "is instance."
+
+python
+isinstance(age, int)       # Is age an instance of int?
+isinstance(name, str)      # Is name an instance of str?
+isinstance(data, dict)     # Is data an instance of dict?
+And to check if something is NOT a certain type:
+
+python
+not isinstance(age, int)   # Is age NOT an int?
+You can also check multiple types at once:
+
+python
+isinstance(x, (int, float))   # Is x either int or float?
+Now, Q24 — get a number from the user, double it, handle invalid input with try/except.
+
+number = input("Enter a number")
+print(type(number))
+print(isinstance(number,int))
+if isinstance(number,int):
+    print(2*number)
+else:
+    print("Please enter a valid number")
+
+12 Feb
+Good thought process, but there's a fundamental problem:
+
+input() ALWAYS returns a string. So isinstance(number, int) will always be False, and every input hits "Please enter a valid number" — even "42".
+
+Also, the question specifically asked for try/except, not isinstance. Here's why try/except is the right tool here:
+
+python
+number = input("Enter a number: ")
+try:
+    number = int(number)      # try converting string → int
+    print(2 * number)
+except ValueError:
+    print("Please enter a valid number")
+The pattern is: try the risky operation (converting to int), and if it fails, except catches the specific error. int("hello") throws ValueError, int("42") works fine.
+
+This is called EAFP — "Easier to Ask Forgiveness than Permission." Instead of checking first (isinstance), you just try it and handle failure. This is the Pythonic way and what interviewers want to see.
+
+Your approach (checking type first) is called LBYL — "Look Before You Leap." It works in some cases, but not here because input() always gives a string.
+
+Rate yourself: again / hard / good / easy
+

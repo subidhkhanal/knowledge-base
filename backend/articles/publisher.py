@@ -10,7 +10,7 @@ import re
 import time
 from typing import List, Dict, Any, Optional
 
-from backend.articles.structurer import structure_conversation, structure_web_article
+from backend.articles.structurer import structure_conversation, structure_web_article, structure_to_html, _format_conversation
 from backend.articles import database as db
 
 
@@ -42,28 +42,28 @@ def publish_article(
     """
     slug = update_slug or generate_slug(title)
 
-    # 1. Structure conversation with LLM
-    structured_content = structure_conversation(conversation, title, groq_api_key=groq_api_key)
+    # 1. Get raw text for search chunking (preserves 100% of content)
+    if len(conversation) == 1:
+        raw_text = conversation[0]["content"]
+    else:
+        raw_text = _format_conversation(conversation)
 
-    # 2. Prepare documents for the chunker (same format as upload pipeline)
+    # 2. Chunk RAW TEXT for search (not LLM output — no content loss)
     doc_meta = {
-        "text": structured_content,
+        "text": raw_text,
         "source": title,
         "source_type": "article",
         "article_slug": slug,
     }
     if project_id is not None:
         doc_meta["project_id"] = project_id
-    documents = [doc_meta]
+    chunks = chunker.chunk_documents([doc_meta])
 
-    # 3. Chunk the article
-    chunks = chunker.chunk_documents(documents)
-
-    # 4. Store chunks in Pinecone
+    # 3. Store chunks in Pinecone
     user_id_str = str(user_id)
     doc_ids = vector_store.add_documents(chunks, user_id=user_id_str)
 
-    # 5. Update BM25 index for hybrid retrieval
+    # 4. Update BM25 index for hybrid retrieval
     if bm25_index is not None:
         bm25_items = []
         for chunk, doc_id in zip(chunks, doc_ids):
@@ -79,9 +79,13 @@ def publish_article(
         bm25_index.add_chunks(bm25_items)
         bm25_index.save()
 
+    # 5. Generate HTML for display (multi-call LLM)
+    content_html = structure_to_html(raw_text, title, groq_api_key=groq_api_key)
+
     return {
         "slug": slug,
-        "structured_content": structured_content,
+        "structured_content": raw_text,
+        "content_html": content_html,
         "chunks_count": len(chunks),
         "conversation_length": len(conversation),
     }
@@ -145,9 +149,13 @@ def publish_web_article(
         bm25_index.add_chunks(bm25_items)
         bm25_index.save()
 
+    # 6. Generate HTML for display (multi-call LLM)
+    content_html = structure_to_html(structured_content, title, groq_api_key=groq_api_key)
+
     return {
         "slug": slug,
         "structured_content": structured_content,
+        "content_html": content_html,
         "chunks_count": len(chunks),
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { Header } from "@/components/Header";
 import { useArticle } from "@/hooks/useArticles";
@@ -14,6 +14,17 @@ function formatDate(dateStr: string): string {
   });
 }
 
+const sourceConfig: Record<string, { label: string; color: string; bg: string }> = {
+  claude: { label: "Claude", color: "#f59e0b", bg: "rgba(217, 119, 6, 0.1)" },
+  chatgpt: { label: "ChatGPT", color: "#10b981", bg: "rgba(16, 185, 129, 0.1)" },
+  web: { label: "Web", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
+  paste: { label: "Pasted", color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
+};
+
+function getSourceInfo(source: string) {
+  return sourceConfig[source] || { label: source, color: "#64748b", bg: "rgba(100, 116, 139, 0.1)" };
+}
+
 function ArticleReaderContent({
   projectSlug,
   articleSlug,
@@ -21,8 +32,9 @@ function ArticleReaderContent({
   projectSlug: string;
   articleSlug: string;
 }) {
-  const { article, isLoading, error } = useArticle(articleSlug);
-  const { createXhr } = useApi();
+  const { article, isLoading, error, refetch } = useArticle(articleSlug);
+  const { apiFetch, createXhr } = useApi();
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   const handleFileUpload = (file: File) => {
     const formData = new FormData();
@@ -48,6 +60,26 @@ function ArticleReaderContent({
     });
 
     xhr.send(formData);
+  };
+
+  const handleReprocess = async () => {
+    if (!article || isReprocessing) return;
+    setIsReprocessing(true);
+    try {
+      const res = await apiFetch(`/api/articles/${encodeURIComponent(articleSlug)}/reprocess`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        refetch();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || "Failed to regenerate layout");
+      }
+    } catch {
+      alert("Failed to connect to the server");
+    } finally {
+      setIsReprocessing(false);
+    }
   };
 
   return (
@@ -138,40 +170,21 @@ function ArticleReaderContent({
             {/* Header */}
             <header className="mb-8">
               <div className="mb-3 flex items-center gap-3">
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                  style={{
-                    background:
-                      article.source === "claude"
-                        ? "rgba(217, 119, 6, 0.1)"
-                        : article.source === "web"
-                          ? "rgba(59, 130, 246, 0.1)"
-                          : "rgba(16, 185, 129, 0.1)",
-                    color:
-                      article.source === "claude"
-                        ? "#f59e0b"
-                        : article.source === "web"
-                          ? "#3b82f6"
-                          : "#10b981",
-                  }}
-                >
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{
-                      background:
-                        article.source === "claude"
-                          ? "#f59e0b"
-                          : article.source === "web"
-                            ? "#3b82f6"
-                            : "#10b981",
-                    }}
-                  />
-                  {article.source === "claude"
-                    ? "Claude"
-                    : article.source === "web"
-                      ? "Web"
-                      : "ChatGPT"}
-                </span>
+                {(() => {
+                  const src = getSourceInfo(article.source);
+                  return (
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                      style={{ background: src.bg, color: src.color }}
+                    >
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: src.color }}
+                      />
+                      {src.label}
+                    </span>
+                  );
+                })()}
                 <span
                   className="text-xs"
                   style={{ color: "var(--text-tertiary)" }}
@@ -218,6 +231,40 @@ function ArticleReaderContent({
               className="mb-8"
               style={{ border: "none", borderTop: "1px solid var(--border)" }}
             />
+
+            {/* Regenerate button for articles without HTML */}
+            {!article.content_html && (
+              <div className="mb-8">
+                <button
+                  onClick={handleReprocess}
+                  disabled={isReprocessing}
+                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium cursor-pointer"
+                  style={{
+                    background: "var(--accent-subtle)",
+                    color: "var(--accent)",
+                    border: "1px solid var(--border-accent)",
+                    opacity: isReprocessing ? 0.6 : 1,
+                  }}
+                >
+                  {isReprocessing ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Generating layout...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Regenerate Layout
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* Content */}
             <div

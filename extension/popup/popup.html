@@ -33,8 +33,13 @@
         </div>
       </div>
 
-      <!-- Scrape status -->
-      <div class="status" id="scrape-status">Detecting content...</div>
+      <!-- Paste conversation or auto-detected web article -->
+      <div id="paste-section">
+        <label for="conversation-paste">Paste conversation (Ctrl+A, Ctrl+C from chat)</label>
+        <textarea id="conversation-paste" rows="4" placeholder="Paste your conversation here..."></textarea>
+        <div id="paste-status" class="status"></div>
+      </div>
+      <div id="web-article-status" class="status"></div>
 
       <!-- Project selector -->
       <label for="project-select">Project</label>
