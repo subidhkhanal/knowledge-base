@@ -172,6 +172,106 @@ export function ChatWidget() {
     setShowHistory(false);
   };
 
+  const handleResearchSubmit = async (inputText: string, assistantId: string) => {
+    const body: Record<string, string> = { topic: inputText };
+    if (slug) body.project_slug = slug;
+
+    try {
+      const response = await apiFetch("/api/research/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || "Research failed to start");
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data: ")) continue;
+
+          try {
+            const event = JSON.parse(line.slice(6));
+
+            if (event.type === "progress") {
+              const phaseLabels: Record<string, string> = {
+                planning: "Planning research angles",
+                researching: "Researching across the web",
+                analyzing: "Analyzing findings",
+                writing: "Writing article",
+                storing: "Storing in knowledge base",
+              };
+              const label = phaseLabels[event.phase] || event.phase;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, content: `**${label}...**\n\n${event.message || ""}` }
+                    : m
+                )
+              );
+            } else if (event.type === "complete") {
+              const articleUrl = slug
+                ? `/projects/${slug}/articles/${event.slug}`
+                : `/research/${event.slug}`;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content:
+                          `**Research complete!**\n\n` +
+                          `**${event.title}**\n` +
+                          `${event.word_count?.toLocaleString()} words | ` +
+                          `${event.sources_count} sources | ` +
+                          `${event.sections_count} sections\n\n` +
+                          `[Read the article](${articleUrl})`,
+                      }
+                    : m
+                )
+              );
+            } else if (event.type === "error") {
+              throw new Error(event.message || "Research failed");
+            }
+          } catch (e) {
+            if (e instanceof Error && e.message !== "Research failed") {
+              // Re-throw actual errors, skip JSON parse failures
+              if (e.message !== "Unexpected end of JSON input" && !e.message.includes("JSON")) {
+                throw e;
+              }
+            } else {
+              throw e;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Research failed";
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? { ...m, content: m.content ? `${m.content}\n\n**Error:** ${msg}` : `**Error:** ${msg}` }
+            : m
+        )
+      );
+    }
+  };
+
   const handleSubmit = async (inputText: string) => {
     if (isChatLoading) return;
 
@@ -196,6 +296,12 @@ export function ChatWidget() {
       { id: assistantId, role: "assistant" as const, content: "" },
     ]);
     setIsChatLoading(true);
+
+    if (mode === "research") {
+      await handleResearchSubmit(inputText, assistantId);
+      setIsChatLoading(false);
+      return;
+    }
 
     const endpoint = slug
       ? `/api/projects/${encodeURIComponent(slug)}/query`

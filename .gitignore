@@ -26,6 +26,9 @@ data/bm25_cache/
 *.swp
 *.swo
 
+# Claude
+.claude/
+
 # Node/Frontend
 frontend/node_modules/
 frontend/.next/
