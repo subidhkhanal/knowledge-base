@@ -32,7 +32,7 @@ export function ArticleCard({
   index,
 }: ArticleCardProps) {
   return (
-    <Link href={`/articles/${slug}`}>
+    <Link href={`/projects/${slug}`}>
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}

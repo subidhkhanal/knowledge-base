@@ -80,14 +80,14 @@ export function Header({ onToggleSidebar, onFileUpload }: HeaderProps) {
             </>
           )}
           <Link
-            href="/articles"
+            href="/projects"
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-bg-hover"
             style={{ color: "var(--text-secondary)" }}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
             </svg>
-            <span className="hidden lg:inline">Library</span>
+            <span className="hidden lg:inline">Projects</span>
           </Link>
         </div>
       </div>

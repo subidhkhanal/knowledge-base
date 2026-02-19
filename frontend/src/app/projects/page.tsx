@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { Header } from "@/components/Header";
 import { ArticleCard } from "@/components/ArticleCard";
 import { useArticles } from "@/hooks/useArticles";
@@ -14,9 +13,9 @@ interface Source {
   chunk_count: number;
 }
 
-function LibraryContent() {
+function ProjectsContent() {
   const { articles, isLoading: articlesLoading, error: articlesError, refetch: refetchArticles } = useArticles();
-  const { apiFetch } = useApi();
+  const { apiFetch, createXhr } = useApi();
 
   const [documents, setDocuments] = useState<Source[]>([]);
   const [docsLoading, setDocsLoading] = useState(true);
@@ -70,6 +69,32 @@ function LibraryContent() {
     }
   };
 
+  const handleFileUpload = (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = createXhr("POST", "/api/upload/document");
+
+    xhr.addEventListener("load", () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          fetchDocuments();
+        } else {
+          alert(data.detail || "Upload failed");
+        }
+      } catch {
+        alert("Upload failed: invalid response");
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      alert("Upload failed: could not connect to server");
+    });
+
+    xhr.send(formData);
+  };
+
   const handleRefreshAll = () => {
     refetchArticles();
     fetchDocuments();
@@ -77,26 +102,9 @@ function LibraryContent() {
 
   const isLoading = articlesLoading && docsLoading;
 
-  const getDocumentIcon = (type: string) => {
-    switch (type) {
-      case "pdf":
-        return (
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        );
-      default:
-        return (
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        );
-    }
-  };
-
   return (
     <div className="h-screen overflow-y-auto" style={{ background: "var(--bg-primary)" }}>
-      <Header />
+      <Header onFileUpload={handleFileUpload} />
 
       <main className="mx-auto max-w-4xl px-6 py-12">
         {/* Page header */}
@@ -106,7 +114,7 @@ function LibraryContent() {
               className="text-2xl font-semibold tracking-tight"
               style={{ color: "var(--text-primary)" }}
             >
-              Library
+              Projects
             </h1>
             {!isLoading && (
               <p
@@ -436,6 +444,6 @@ function LibraryContent() {
   );
 }
 
-export default function ArticlesPage() {
-  return <LibraryContent />;
+export default function ProjectsPage() {
+  return <ProjectsContent />;
 }

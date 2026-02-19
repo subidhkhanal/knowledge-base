@@ -5,6 +5,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { Header } from "@/components/Header";
 import { useArticle } from "@/hooks/useArticles";
+import { useApi } from "@/hooks/useApi";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -16,15 +17,42 @@ function formatDate(dateStr: string): string {
 
 function ArticleContent({ slug }: { slug: string }) {
   const { article, isLoading, error } = useArticle(slug);
+  const { createXhr } = useApi();
+
+  const handleFileUpload = (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const xhr = createXhr("POST", "/api/upload/document");
+
+    xhr.addEventListener("load", () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300) {
+          alert("Upload complete: document added to knowledge base");
+        } else {
+          alert(data.detail || "Upload failed");
+        }
+      } catch {
+        alert("Upload failed: invalid response");
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      alert("Upload failed: could not connect to server");
+    });
+
+    xhr.send(formData);
+  };
 
   return (
     <div className="h-screen overflow-y-auto" style={{ background: "var(--bg-primary)" }}>
-      <Header />
+      <Header onFileUpload={handleFileUpload} />
 
       <main className="mx-auto max-w-2xl px-6 py-12">
         {/* Back link */}
         <Link
-          href="/articles"
+          href="/projects"
           className="mb-8 inline-flex items-center gap-1.5 text-sm"
           style={{ color: "var(--text-secondary)" }}
         >
@@ -41,7 +69,7 @@ function ArticleContent({ slug }: { slug: string }) {
               d="M15 19l-7-7 7-7"
             />
           </svg>
-          Back to Articles
+          Back to Projects
         </Link>
 
         {/* Loading */}
