@@ -13,6 +13,8 @@ interface SidebarProps {
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onRenameConversation: (id: string, newTitle: string) => void;
+  /** When true, renders without the motion.aside wrapper — fills parent instead */
+  embedded?: boolean;
 }
 
 function formatRelativeTime(timestamp: number) {
@@ -63,6 +65,7 @@ export function Sidebar({
   onSelectConversation,
   onDeleteConversation,
   onRenameConversation,
+  embedded,
 }: SidebarProps) {
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -73,16 +76,9 @@ export function Sidebar({
   );
   const groups = groupConversationsByDate(filtered);
 
-  return (
-    <>
-      <motion.aside
-        animate={{ width: isOpen ? 256 : 0 }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="flex-shrink-0 overflow-hidden"
-        style={{ borderRight: isOpen ? "1px solid var(--border)" : "none" }}
-      >
+  const innerContent = (
         <div
-          className="flex h-full w-64 flex-col"
+          className={`flex h-full flex-col ${embedded ? "w-full" : "w-64"}`}
           style={{ background: "var(--bg-secondary)" }}
         >
           {/* Search Bar */}
@@ -240,8 +236,18 @@ export function Sidebar({
           </div>
 
         </div>
-      </motion.aside>
+  );
 
-    </>
+  if (embedded) return innerContent;
+
+  return (
+    <motion.aside
+      animate={{ width: isOpen ? 256 : 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="flex-shrink-0 overflow-hidden"
+      style={{ borderRight: isOpen ? "1px solid var(--border)" : "none" }}
+    >
+      {innerContent}
+    </motion.aside>
   );
 }

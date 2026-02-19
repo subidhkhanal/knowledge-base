@@ -1,18 +1,14 @@
 "use client";
 
-import { use, useState, useRef, useEffect } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
 import { useProject } from "@/hooks/useProjects";
-import { useApi } from "@/hooks/useApi";
 import { useToasts } from "@/hooks/useToasts";
 import { useUpload } from "@/hooks/useUpload";
 import { ToastContainer } from "@/components/Toast";
 import { UploadModal } from "@/components/UploadModal";
-import { ChatArea } from "@/components/ChatArea";
-import { ChatInput } from "@/components/ChatInput";
-import type { Message, Source } from "@/types/chat";
 
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -30,194 +26,9 @@ function formatRelativeDate(dateStr: string): string {
 
 function ProjectDetailContent({ slug }: { slug: string }) {
   const { project, isLoading, error, refetch } = useProject(slug);
-  const { apiFetch } = useApi();
   const { toasts, addToast, removeToast, updateToast } = useToasts();
   const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
-
-  // Chat panel state
-  const [chatOpen, setChatOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isChatLoading, setIsChatLoading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-
-  // Streaming refs
-  const tokenQueueRef = useRef<
-    { content: string; type: string; sources?: Source[]; provider?: string }[]
-  >([]);
-  const drainIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (drainIntervalRef.current) {
-        clearInterval(drainIntervalRef.current);
-      }
-    };
-  }, []);
-
-  const startDraining = (assistantId: string) => {
-    if (drainIntervalRef.current) return;
-
-    drainIntervalRef.current = setInterval(() => {
-      const queue = tokenQueueRef.current;
-      if (queue.length === 0) return;
-
-      const item = queue.shift()!;
-
-      if (item.type === "token") {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, content: m.content + item.content }
-              : m
-          )
-        );
-      } else if (item.type === "done") {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, sources: item.sources, provider: item.provider }
-              : m
-          )
-        );
-        clearInterval(drainIntervalRef.current!);
-        drainIntervalRef.current = null;
-      }
-    }, 30);
-  };
-
-  const handleSubmitMessage = async (inputText: string) => {
-    if (isChatLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: inputText,
-    };
-
-    const assistantId = (Date.now() + 1).toString();
-
-    setMessages((prev) => [
-      ...prev,
-      userMessage,
-      { id: assistantId, role: "assistant", content: "" },
-    ]);
-    setIsChatLoading(true);
-
-    try {
-      const chatHistory = messages.slice(-6).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      const response = await apiFetch(
-        `/api/projects/${encodeURIComponent(slug)}/query`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            question: inputText,
-            chat_history:
-              chatHistory.length > 0 ? chatHistory : undefined,
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Query failed");
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6);
-          if (!jsonStr) continue;
-
-          try {
-            const data = JSON.parse(jsonStr);
-
-            if (data.type === "token") {
-              const content = data.content;
-              if (content.length > 20) {
-                const words = content.split(/(\s+)/);
-                for (const word of words) {
-                  if (word)
-                    tokenQueueRef.current.push({
-                      type: "token",
-                      content: word,
-                    });
-                }
-              } else {
-                tokenQueueRef.current.push({
-                  type: "token",
-                  content: content,
-                });
-              }
-              startDraining(assistantId);
-            } else if (data.type === "done") {
-              tokenQueueRef.current.push({
-                type: "done",
-                content: "",
-                sources: data.sources,
-                provider: data.provider,
-              });
-            }
-          } catch {
-            // Skip malformed JSON
-          }
-        }
-      }
-    } catch {
-      if (drainIntervalRef.current) {
-        clearInterval(drainIntervalRef.current);
-        drainIntervalRef.current = null;
-      }
-      tokenQueueRef.current = [];
-
-      setMessages((prev) => {
-        const hasAssistant = prev.some((m) => m.id === assistantId);
-        if (hasAssistant) {
-          return prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content:
-                    m.content ||
-                    "Unable to connect. Please ensure the backend is running.",
-                }
-              : m
-          );
-        }
-        return [
-          ...prev,
-          {
-            id: assistantId,
-            role: "assistant" as const,
-            content:
-              "Unable to connect. Please ensure the backend is running.",
-          },
-        ];
-      });
-    } finally {
-      setIsChatLoading(false);
-    }
-  };
-
-  const handleSourceClick = (_source: Source) => {
-    // No-op for project chat
-  };
 
   return (
     <div className="flex h-screen flex-col" style={{ background: "var(--bg-primary)" }}>
@@ -235,280 +46,118 @@ function ProjectDetailContent({ slug }: { slug: string }) {
 
       <Header onUploadClick={() => setShowUploadModal(true)} />
 
-      <div className="flex flex-1 min-h-0">
-        {/* Left: Project content */}
-        <div className="flex-1 overflow-y-auto min-w-0">
-          <main className="mx-auto max-w-4xl px-6 py-12">
-            {/* Back link */}
-            <Link
-              href="/projects"
-              className="mb-6 inline-flex items-center gap-1.5 text-sm"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Projects
-            </Link>
+      <div className="flex-1 overflow-y-auto">
+        <main className="mx-auto max-w-4xl px-6 py-12">
+          {/* Back link */}
+          <Link
+            href="/projects"
+            className="mb-6 inline-flex items-center gap-1.5 text-sm"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Projects
+          </Link>
 
-            {/* Loading */}
-            {isLoading && (
-              <div className="flex justify-center py-16">
-                <svg
-                  className="h-6 w-6 animate-spin"
-                  style={{ color: "var(--accent)" }}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              </div>
-            )}
-
-            {/* Error */}
-            {error && (
-              <div
-                className="flex items-center gap-3 rounded-xl p-4"
-                style={{ background: "var(--error-bg)" }}
+          {/* Loading */}
+          {isLoading && (
+            <div className="flex justify-center py-16">
+              <svg
+                className="h-6 w-6 animate-spin"
+                style={{ color: "var(--accent)" }}
+                viewBox="0 0 24 24"
+                fill="none"
               >
-                <svg className="h-5 w-5" style={{ color: "var(--error)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div
+              className="flex items-center gap-3 rounded-xl p-4"
+              style={{ background: "var(--error-bg)" }}
+            >
+              <svg className="h-5 w-5" style={{ color: "var(--error)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>
+            </div>
+          )}
+
+          {/* Project content */}
+          {project && (
+            <>
+              {/* Project header */}
+              <div className="mb-8">
+                <h1
+                  className="text-2xl font-semibold tracking-tight"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {project.title}
+                </h1>
+                {project.description && (
+                  <p
+                    className="mt-2 text-sm leading-relaxed"
+                    style={{ color: "var(--text-tertiary)" }}
+                  >
+                    {project.description}
+                  </p>
+                )}
+                <p
+                  className="mt-2 text-xs"
+                  style={{ color: "var(--text-tertiary)" }}
+                >
+                  {project.article_count} {project.article_count === 1 ? "article" : "articles"} · {project.document_count} {project.document_count === 1 ? "document" : "documents"}
+                </p>
               </div>
-            )}
 
-            {/* Project content */}
-            {project && (
-              <>
-                {/* Project header */}
-                <div className="mb-8">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h1
-                        className="text-2xl font-semibold tracking-tight"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {project.title}
-                      </h1>
-                      {project.description && (
-                        <p
-                          className="mt-2 text-sm leading-relaxed"
-                          style={{ color: "var(--text-tertiary)" }}
-                        >
-                          {project.description}
-                        </p>
-                      )}
-                      <p
-                        className="mt-2 text-xs"
-                        style={{ color: "var(--text-tertiary)" }}
-                      >
-                        {project.article_count} {project.article_count === 1 ? "article" : "articles"} · {project.document_count} {project.document_count === 1 ? "document" : "documents"}
-                      </p>
-                    </div>
+              {/* Articles Section */}
+              <section className="mb-12">
+                <h2
+                  className="mb-4 text-sm font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--text-tertiary)" }}
+                >
+                  Articles
+                </h2>
 
-                    {/* Chat toggle button */}
-                    <button
-                      onClick={() => setChatOpen(!chatOpen)}
-                      className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium cursor-pointer"
+                {project.articles.length === 0 && (
+                  <div
+                    className="flex flex-col items-center justify-center rounded-xl py-12 text-center"
+                    style={{
+                      background: "var(--bg-secondary)",
+                      border: "1px solid var(--border)",
+                      boxShadow: "var(--shadow-card)",
+                    }}
+                  >
+                    <div
+                      className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
                       style={{
-                        background: chatOpen ? "var(--bg-secondary)" : "var(--accent)",
-                        color: chatOpen ? "var(--text-primary)" : "white",
-                        border: chatOpen ? "1px solid var(--border)" : "1px solid transparent",
+                        background: "var(--accent-subtle)",
+                        border: "1px solid var(--border-accent)",
                       }}
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      <svg className="h-6 w-6" style={{ color: "var(--accent)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                       </svg>
-                      {chatOpen ? "Close Chat" : "Chat with Project"}
-                    </button>
+                    </div>
+                    <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      No articles yet
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      Publish conversations from the extension to this project
+                    </p>
                   </div>
-                </div>
+                )}
 
-                {/* Articles Section */}
-                <section className="mb-12">
-                  <h2
-                    className="mb-4 text-sm font-semibold uppercase tracking-wider"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    Articles
-                  </h2>
-
-                  {project.articles.length === 0 && (
-                    <div
-                      className="flex flex-col items-center justify-center rounded-xl py-12 text-center"
-                      style={{
-                        background: "var(--bg-secondary)",
-                        border: "1px solid var(--border)",
-                        boxShadow: "var(--shadow-card)",
-                      }}
-                    >
-                      <div
-                        className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
-                        style={{
-                          background: "var(--accent-subtle)",
-                          border: "1px solid var(--border-accent)",
-                        }}
-                      >
-                        <svg className="h-6 w-6" style={{ color: "var(--accent)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                      </div>
-                      <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                        No articles yet
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                        Publish conversations from the extension to this project
-                      </p>
-                    </div>
-                  )}
-
-                  {project.articles.length > 0 && (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {project.articles.map((article, index) => (
-                        <Link key={article.slug} href={`/projects/${slug}/articles/${article.slug}`}>
-                          <motion.div
-                            initial={{ opacity: 0, y: 24 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{
-                              duration: 0.6,
-                              ease: [0.16, 1, 0.3, 1],
-                              delay: index * 0.05,
-                            }}
-                            className="group flex flex-col gap-3 rounded-xl p-4 cursor-pointer"
-                            style={{
-                              background: "var(--bg-secondary)",
-                              border: "1px solid var(--border)",
-                              boxShadow: "var(--shadow-card)",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = "var(--border-hover)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = "var(--border)";
-                            }}
-                          >
-                            {/* Source badge */}
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                                style={{
-                                  background:
-                                    article.source === "claude"
-                                      ? "rgba(217, 119, 6, 0.1)"
-                                      : article.source === "web"
-                                        ? "rgba(59, 130, 246, 0.1)"
-                                        : "rgba(16, 185, 129, 0.1)",
-                                  color:
-                                    article.source === "claude"
-                                      ? "#f59e0b"
-                                      : article.source === "web"
-                                        ? "#3b82f6"
-                                        : "#10b981",
-                                }}
-                              >
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full"
-                                  style={{
-                                    background:
-                                      article.source === "claude"
-                                        ? "#f59e0b"
-                                        : article.source === "web"
-                                          ? "#3b82f6"
-                                          : "#10b981",
-                                  }}
-                                />
-                                {article.source === "claude" ? "Claude" : article.source === "web" ? "Web" : "ChatGPT"}
-                              </span>
-                            </div>
-
-                            {/* Title */}
-                            <h3
-                              className="text-sm font-medium leading-snug line-clamp-2"
-                              style={{ color: "var(--text-primary)" }}
-                            >
-                              {article.title}
-                            </h3>
-
-                            {/* Tags */}
-                            {article.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {article.tags.map((tag) => (
-                                  <span
-                                    key={tag}
-                                    className="rounded-md px-2 py-0.5 text-xs"
-                                    style={{
-                                      background: "var(--accent-subtle)",
-                                      color: "var(--accent)",
-                                    }}
-                                  >
-                                    {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Meta */}
-                            <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                              <span>{formatRelativeDate(article.created_at)}</span>
-                              {article.conversation_length > 0 && (
-                                <>
-                                  <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
-                                  <span>{article.conversation_length} messages</span>
-                                </>
-                              )}
-                            </div>
-                          </motion.div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </section>
-
-                {/* Documents Section */}
-                <section>
-                  <h2
-                    className="mb-4 text-sm font-semibold uppercase tracking-wider"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    Documents
-                  </h2>
-
-                  {project.documents.length === 0 && (
-                    <div
-                      className="flex flex-col items-center justify-center rounded-xl py-12 text-center"
-                      style={{
-                        background: "var(--bg-secondary)",
-                        border: "1px solid var(--border)",
-                        boxShadow: "var(--shadow-card)",
-                      }}
-                    >
-                      <div
-                        className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
-                        style={{
-                          background: "var(--accent-subtle)",
-                          border: "1px solid var(--border-accent)",
-                        }}
-                      >
-                        <svg className="h-6 w-6" style={{ color: "var(--accent)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
-                      </div>
-                      <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                        No documents yet
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                        Upload documents using the button in the header
-                      </p>
-                    </div>
-                  )}
-
-                  {project.documents.length > 0 && (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {project.documents.map((document, index) => (
+                {project.articles.length > 0 && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {project.articles.map((article, index) => (
+                      <Link key={article.slug} href={`/projects/${slug}/articles/${article.slug}`}>
                         <motion.div
-                          key={document.source}
                           initial={{ opacity: 0, y: 24 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{
@@ -516,100 +165,188 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                             ease: [0.16, 1, 0.3, 1],
                             delay: index * 0.05,
                           }}
-                          className="flex flex-col gap-3 rounded-xl p-4"
+                          className="group flex flex-col gap-3 rounded-xl p-4 cursor-pointer"
                           style={{
                             background: "var(--bg-secondary)",
                             border: "1px solid var(--border)",
                             boxShadow: "var(--shadow-card)",
                           }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = "var(--border-hover)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = "var(--border)";
+                          }}
                         >
-                          {/* Type badge */}
-                          <span
-                            className="inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                            style={{
-                              background: document.source_type === "pdf" ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)",
-                              color: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
-                            }}
-                          >
+                          {/* Source badge */}
+                          <div className="flex items-center gap-2">
                             <span
-                              className="h-1.5 w-1.5 rounded-full"
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
                               style={{
-                                background: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                                background:
+                                  article.source === "claude"
+                                    ? "rgba(217, 119, 6, 0.1)"
+                                    : article.source === "web"
+                                      ? "rgba(59, 130, 246, 0.1)"
+                                      : "rgba(16, 185, 129, 0.1)",
+                                color:
+                                  article.source === "claude"
+                                    ? "#f59e0b"
+                                    : article.source === "web"
+                                      ? "#3b82f6"
+                                      : "#10b981",
                               }}
-                            />
-                            {document.source_type === "pdf" ? "PDF" : "Document"}
-                          </span>
+                            >
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{
+                                  background:
+                                    article.source === "claude"
+                                      ? "#f59e0b"
+                                      : article.source === "web"
+                                        ? "#3b82f6"
+                                        : "#10b981",
+                                }}
+                              />
+                              {article.source === "claude" ? "Claude" : article.source === "web" ? "Web" : "ChatGPT"}
+                            </span>
+                          </div>
 
+                          {/* Title */}
                           <h3
                             className="text-sm font-medium leading-snug line-clamp-2"
                             style={{ color: "var(--text-primary)" }}
                           >
-                            {document.source}
+                            {article.title}
                           </h3>
 
-                          <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                            {document.chunk_count} {document.chunk_count === 1 ? "chunk" : "chunks"}
+                          {/* Tags */}
+                          {article.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {article.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-md px-2 py-0.5 text-xs"
+                                  style={{
+                                    background: "var(--accent-subtle)",
+                                    color: "var(--accent)",
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Meta */}
+                          <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            <span>{formatRelativeDate(article.created_at)}</span>
+                            {article.conversation_length > 0 && (
+                              <>
+                                <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
+                                <span>{article.conversation_length} messages</span>
+                              </>
+                            )}
                           </div>
                         </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              </>
-            )}
-          </main>
-        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
 
-        {/* Right: Chat panel */}
-        <AnimatePresence>
-          {chatOpen && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 480, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-col overflow-hidden shrink-0"
-              style={{ borderLeft: "1px solid var(--border)" }}
-            >
-              {/* Chat header */}
-              <div
-                className="flex items-center justify-between px-4 py-3 shrink-0"
-                style={{ borderBottom: "1px solid var(--border)" }}
-              >
-                <div className="min-w-0">
-                  <h2
-                    className="text-sm font-semibold truncate"
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    Chat
-                  </h2>
-                  <p
-                    className="text-xs truncate"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    Answers scoped to this project
-                  </p>
-                </div>
-                <button
-                  onClick={() => setChatOpen(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg cursor-pointer shrink-0"
+              {/* Documents Section */}
+              <section>
+                <h2
+                  className="mb-4 text-sm font-semibold uppercase tracking-wider"
                   style={{ color: "var(--text-tertiary)" }}
-                  title="Close chat"
                 >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+                  Documents
+                </h2>
 
-              {/* Chat content */}
-              <div className="flex flex-1 flex-col min-h-0">
-                <ChatArea messages={messages} onSourceClick={handleSourceClick} />
-                <ChatInput onSubmit={handleSubmitMessage} isLoading={isChatLoading} />
-              </div>
-            </motion.div>
+                {project.documents.length === 0 && (
+                  <div
+                    className="flex flex-col items-center justify-center rounded-xl py-12 text-center"
+                    style={{
+                      background: "var(--bg-secondary)",
+                      border: "1px solid var(--border)",
+                      boxShadow: "var(--shadow-card)",
+                    }}
+                  >
+                    <div
+                      className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
+                      style={{
+                        background: "var(--accent-subtle)",
+                        border: "1px solid var(--border-accent)",
+                      }}
+                    >
+                      <svg className="h-6 w-6" style={{ color: "var(--accent)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                    </div>
+                    <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      No documents yet
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      Upload documents using the button in the header
+                    </p>
+                  </div>
+                )}
+
+                {project.documents.length > 0 && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {project.documents.map((document, index) => (
+                      <motion.div
+                        key={document.source}
+                        initial={{ opacity: 0, y: 24 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.6,
+                          ease: [0.16, 1, 0.3, 1],
+                          delay: index * 0.05,
+                        }}
+                        className="flex flex-col gap-3 rounded-xl p-4"
+                        style={{
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border)",
+                          boxShadow: "var(--shadow-card)",
+                        }}
+                      >
+                        {/* Type badge */}
+                        <span
+                          className="inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                          style={{
+                            background: document.source_type === "pdf" ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)",
+                            color: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                          }}
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{
+                              background: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                            }}
+                          />
+                          {document.source_type === "pdf" ? "PDF" : "Document"}
+                        </span>
+
+                        <h3
+                          className="text-sm font-medium leading-snug line-clamp-2"
+                          style={{ color: "var(--text-primary)" }}
+                        >
+                          {document.source}
+                        </h3>
+
+                        <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                          {document.chunk_count} {document.chunk_count === 1 ? "chunk" : "chunks"}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
           )}
-        </AnimatePresence>
+        </main>
       </div>
     </div>
   );

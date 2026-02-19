@@ -9,9 +9,10 @@ import { EmptyState } from "./EmptyState";
 interface ChatAreaProps {
   messages: Message[];
   onSourceClick: (source: Source) => void;
+  compact?: boolean;
 }
 
-export function ChatArea({ messages, onSourceClick }: ChatAreaProps) {
+export function ChatArea({ messages, onSourceClick, compact }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -66,9 +67,17 @@ export function ChatArea({ messages, onSourceClick }: ChatAreaProps) {
   return (
     <div className="relative flex-1 flex flex-col min-h-0">
       <main ref={chatContainerRef} className="flex-1 overflow-auto min-h-0">
-        <div className="mx-auto max-w-3xl px-6 py-8">
+        <div className={compact ? "px-4 py-4" : "mx-auto max-w-3xl px-6 py-8"}>
           {messages.length === 0 ? (
-            <EmptyState />
+            compact ? (
+              <div className="flex h-full flex-col items-center justify-center py-12 text-center">
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  Ask anything about your documents...
+                </p>
+              </div>
+            ) : (
+              <EmptyState />
+            )
           ) : (
             <div className="space-y-6">
               {messages.map((message, index) => {
@@ -102,7 +111,7 @@ export function ChatArea({ messages, onSourceClick }: ChatAreaProps) {
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: 0.2 }}
             onClick={scrollToBottom}
-            className="absolute right-6 bottom-4 flex h-10 w-10 items-center justify-center rounded-full cursor-pointer"
+            className={`absolute flex items-center justify-center rounded-full cursor-pointer ${compact ? "right-3 bottom-2 h-8 w-8" : "right-6 bottom-4 h-10 w-10"}`}
             style={{
               background: "var(--accent)",
               color: "white",

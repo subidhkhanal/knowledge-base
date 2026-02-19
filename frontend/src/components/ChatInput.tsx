@@ -5,9 +5,10 @@ import { useState, useRef } from "react";
 interface ChatInputProps {
   onSubmit: (message: string) => void;
   isLoading: boolean;
+  compact?: boolean;
 }
 
-export function ChatInput({ onSubmit, isLoading }: ChatInputProps) {
+export function ChatInput({ onSubmit, isLoading, compact }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -23,8 +24,8 @@ export function ChatInput({ onSubmit, isLoading }: ChatInputProps) {
   };
 
   return (
-    <footer className="px-4 md:px-6 pb-4 md:pb-6">
-      <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
+    <footer className={compact ? "px-3 pb-3" : "px-4 md:px-6 pb-4 md:pb-6"}>
+      <form onSubmit={handleSubmit} className={compact ? "" : "mx-auto max-w-3xl"}>
         <div
           className="flex items-end gap-3 rounded-xl px-4 py-3 cursor-text"
           style={{

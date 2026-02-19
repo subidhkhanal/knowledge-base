@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Message, Conversation } from "@/types/chat";
 
-const STORAGE_KEY = "kb_conversations";
+const DEFAULT_STORAGE_KEY = "kb_conversations";
 const MAX_CONVERSATIONS = 50;
 
-export function useChatHistory() {
+export function useChatHistory(storageKey: string = DEFAULT_STORAGE_KEY) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -14,7 +14,7 @@ export function useChatHistory() {
   // Load conversations from localStorage on mount
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(storageKey);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -33,7 +33,7 @@ export function useChatHistory() {
     if (!isLoaded) return;
     try {
       const toStore = conversations.slice(0, MAX_CONVERSATIONS);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+      localStorage.setItem(storageKey, JSON.stringify(toStore));
     } catch (e) {
       console.error("Failed to save conversations:", e);
     }
