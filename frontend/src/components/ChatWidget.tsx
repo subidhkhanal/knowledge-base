@@ -319,51 +319,27 @@ export function ChatWidget() {
               style={{ borderBottom: "1px solid var(--border)" }}
             >
               <div className="flex items-center gap-2">
-                {/* History / back button */}
+                {/* History toggle */}
                 <button
                   onClick={() => setShowHistory(!showHistory)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg cursor-pointer"
-                  style={{ color: showHistory ? "var(--accent)" : "var(--text-tertiary)" }}
-                  title={showHistory ? "Back to chat" : "Chat history"}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-secondary)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer hover:bg-bg-hover"
+                  style={{ color: "var(--text-secondary)" }}
+                  aria-label="Toggle sidebar"
                 >
-                  {showHistory ? (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
                 </button>
 
                 <h2
                   className="text-sm font-semibold"
                   style={{ color: "var(--text-primary)" }}
                 >
-                  {showHistory ? "History" : slug ? "Project Chat" : "Chat"}
+                  {slug ? "Project Chat" : "Chat"}
                 </h2>
               </div>
 
               <div className="flex items-center gap-1">
-                {/* New chat button (only in chat view) */}
-                {!showHistory && (
-                  <button
-                    onClick={handleNewChat}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg cursor-pointer"
-                    style={{ color: "var(--text-tertiary)" }}
-                    title="New chat"
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-secondary)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </button>
-                )}
-
                 {/* Minimize button */}
                 <button
                   onClick={() => setIsOpen(false)}
@@ -390,21 +366,19 @@ export function ChatWidget() {
               </div>
             </div>
 
-            {/* Body: history list or chat */}
-            {showHistory ? (
+            {/* Body: sidebar + chat side by side */}
+            <div className="flex flex-1 min-h-0">
               <Sidebar
                 conversations={conversations}
                 currentConversationId={currentConversationId}
-                isOpen={true}
+                isOpen={showHistory}
                 onToggle={() => setShowHistory(false)}
                 onNewChat={handleNewChat}
                 onSelectConversation={handleSelectConversation}
                 onDeleteConversation={deleteConversation}
                 onRenameConversation={renameConversation}
-                embedded
               />
-            ) : (
-              <div className="flex flex-1 flex-col min-h-0">
+              <div className="flex flex-1 flex-col min-w-0 min-h-0">
                 <ChatArea
                   messages={messages}
                   onSourceClick={handleSourceClick}
@@ -416,7 +390,7 @@ export function ChatWidget() {
                   compact
                 />
               </div>
-            )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
