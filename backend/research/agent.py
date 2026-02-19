@@ -38,17 +38,22 @@ def run_research_pipeline(
     topic: str,
     groq_api_key: Optional[str] = None,
     progress_callback: Optional[Callable] = None,
+    query_engine: Any = None,
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Full research pipeline: topic -> plan -> research -> analysis -> article.
+    Full research pipeline: topic -> plan -> PKB + web research -> analysis -> article.
 
-    All LLM and Tavily calls are synchronous. The caller (route layer) handles
-    async bridging via asyncio.to_thread().
+    The pipeline first searches your existing knowledge base, then fills gaps
+    with web research. This creates a knowledge flywheel where each article
+    builds on everything previously stored.
 
     Args:
         topic: The research topic
         groq_api_key: Optional user-provided Groq key
         progress_callback: Optional callable(phase, step, total, message)
+        query_engine: Optional QueryEngine for PKB search (knowledge flywheel)
+        user_id: Optional user ID for PKB data isolation
 
     Returns:
         dict with title, subtitle, slug, content_markdown, tags, word_count, etc.
@@ -68,11 +73,18 @@ def run_research_pipeline(
             f"{len(plan['outline'])} sections",
         )
 
-    # --- Phase 2: Research ---
-    if progress_callback:
-        progress_callback(
-            "researching", 2, total_phases, "Researching across the web..."
-        )
+    # --- Phase 2: Research (PKB first, then web) ---
+    if query_engine and user_id:
+        if progress_callback:
+            progress_callback(
+                "researching", 2, total_phases,
+                "Searching your knowledge base, then the web...",
+            )
+    else:
+        if progress_callback:
+            progress_callback(
+                "researching", 2, total_phases, "Researching across the web..."
+            )
 
     def research_progress(step, total, msg):
         if progress_callback:
@@ -82,7 +94,10 @@ def run_research_pipeline(
             )
 
     research_bank = execute_research_plan(
-        plan, progress_callback=research_progress
+        plan,
+        query_engine=query_engine,
+        user_id=user_id,
+        progress_callback=research_progress,
     )
 
     # --- Phase 3: Analyze ---
@@ -113,17 +128,15 @@ def run_research_pipeline(
 
     # Compile result
     word_count = len(article_markdown.split())
-    sources_count = sum(
-        len(f.get("results", []))
-        for st in research_bank
-        for f in st.get("findings", [])
-    )
+    pkb_sources = sum(r.get("pkb_sources", 0) for r in research_bank)
+    web_sources = sum(r.get("web_sources", 0) for r in research_bank)
+    sources_count = pkb_sources + web_sources
     tags = extract_tags(plan, topic)
     slug = generate_research_slug(plan.get("title", topic))
 
     logger.info(
-        "Research pipeline complete: '%s' — %d words, %d sources",
-        plan.get("title", topic), word_count, sources_count,
+        "Research pipeline complete: '%s' — %d words, %d sources (PKB: %d, Web: %d)",
+        plan.get("title", topic), word_count, sources_count, pkb_sources, web_sources,
     )
 
     return {
@@ -134,5 +147,7 @@ def run_research_pipeline(
         "tags": tags,
         "word_count": word_count,
         "sources_count": sources_count,
+        "pkb_sources_count": pkb_sources,
+        "web_sources_count": web_sources,
         "sections_count": len(plan.get("outline", [])),
     }

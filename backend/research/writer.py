@@ -227,7 +227,10 @@ def write_article(
 
 
 def _find_relevant_research(section_title: str, research_bank: list) -> str:
-    """Find the most relevant research for a given section title."""
+    """Find the most relevant research for a given section title.
+
+    Tags PKB vs web sources so the writer can distinguish them.
+    """
     section_words = set(section_title.lower().split())
 
     scored = []
@@ -242,11 +245,15 @@ def _find_relevant_research(section_title: str, research_bank: list) -> str:
     for _, subtopic in scored[:3]:
         formatted += f"\n### {subtopic['heading']}\n"
         for finding in subtopic["findings"]:
+            source_type = finding.get("source_type", "web")
+            if source_type == "pkb":
+                formatted += "**[PKB — Your existing knowledge:]**\n"
             if finding.get("tavily_answer"):
                 formatted += f"{finding['tavily_answer']}\n"
             for result in finding.get("results", [])[:2]:
+                prefix = "[PKB] " if source_type == "pkb" else ""
                 formatted += (
-                    f"- {result['title']}: {result['content'][:400]}\n"
+                    f"- {prefix}{result['title']}: {result['content'][:400]}\n"
                 )
         for article in subtopic.get("full_articles", [])[:1]:
             formatted += (

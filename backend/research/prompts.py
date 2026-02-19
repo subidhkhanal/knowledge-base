@@ -40,6 +40,14 @@ ANALYZER_PROMPT = """You are a senior analyst at a world-class research firm.
 
 You've been given raw research findings on the topic: "{title}"
 
+IMPORTANT: The research comes from TWO sources:
+1. **[PKB] Personal Knowledge Base** — content the user ALREADY has (uploaded PDFs, saved
+   conversations, clipped articles, past research). These are high-trust, vetted sources.
+2. **Web research** — new findings from Tavily web search. These fill gaps and add recent info.
+
+Items marked with [PKB] are from the user's existing knowledge base.
+Items from web search queries are new web findings.
+
 Your job is to analyze ALL the research and produce a writing brief for each section
 of the article. The article outline is:
 
@@ -53,18 +61,21 @@ For EACH section in the outline, provide:
 5. "analysis_angle": What original analysis or insight to bring
 6. "transition_from_previous": How this section connects to the one before it
 7. "target_words": Suggested word count (500-2000 depending on depth)
+8. "pkb_relevance": How the user's existing knowledge contributes to this section
 
 Also provide:
 - "overall_themes": 3-5 major themes that emerged across all research
-- "contradictions": Any conflicting information found
-- "strongest_sources": The 5 most valuable sources found
+- "contradictions": Any conflicting information found (especially between PKB and web)
+- "strongest_sources": The 5 most valuable sources found (mark which are from PKB)
 - "gaps": Any angles that need more research
+- "pkb_insights": Key insights from the user's existing knowledge that should be highlighted
 
 RESEARCH FINDINGS:
 {research_bank}
 
 Output as JSON with keys: "section_briefs" (array), "overall_themes" (array of strings),
-"contradictions" (array of strings), "strongest_sources" (array of strings), "gaps" (array of strings)."""
+"contradictions" (array of strings), "strongest_sources" (array of strings), "gaps" (array of strings),
+"pkb_insights" (array of strings)."""
 
 
 SECTION_WRITER_PROMPT = """You are a Pulitzer Prize-winning journalist writing an
@@ -85,6 +96,15 @@ WRITING BRIEF FOR THIS SECTION:
 - Target length: {target_words} words
 
 RELEVANT RESEARCH FOR THIS SECTION:
+The research below comes from two sources:
+- Items marked [PKB] are from the user's PERSONAL KNOWLEDGE BASE (existing documents,
+  saved conversations, uploaded papers). Treat these as high-trust, foundational sources.
+- Other items are from NEW WEB RESEARCH that fills gaps beyond the existing knowledge.
+
+When writing, naturally synthesize both — build on existing knowledge and enrich it with
+new web findings. You might write things like "Building on [foundational concept from PKB],
+recent developments show that..."
+
 {section_research}
 
 PREVIOUSLY WRITTEN SECTIONS (for continuity — DO NOT repeat content):

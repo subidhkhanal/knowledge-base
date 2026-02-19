@@ -73,12 +73,19 @@ async def stream_research(
             try:
                 from backend.research.agent import run_research_pipeline
 
+                # Get query engine for PKB search (knowledge flywheel)
+                components = _get_components()
+                qe = components.get("query_engine")
+                user_id_str = str(user_id)
+
                 # Run the synchronous pipeline in a thread
                 result = await asyncio.to_thread(
                     run_research_pipeline,
                     topic=request.topic,
                     groq_api_key=groq_api_key,
                     progress_callback=progress_callback,
+                    query_engine=qe,
+                    user_id=user_id_str,
                 )
 
                 # Phase 5: Store in knowledge base
@@ -89,8 +96,6 @@ async def stream_research(
                     "total": 5,
                     "message": "Storing in knowledge base...",
                 })
-
-                components = _get_components()
 
                 # Chunk and store in vector DB
                 doc_meta = {
@@ -153,6 +158,8 @@ async def stream_research(
                     "title": result["title"],
                     "word_count": result["word_count"],
                     "sources_count": result["sources_count"],
+                    "pkb_sources_count": result.get("pkb_sources_count", 0),
+                    "web_sources_count": result.get("web_sources_count", 0),
                     "sections_count": result["sections_count"],
                 })
 

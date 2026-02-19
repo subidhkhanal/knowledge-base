@@ -239,6 +239,10 @@ async def start_research(
     from backend.articles import database as articles_db
     from backend.articles.structurer import structure_to_html
 
+    # Get query engine for PKB search (knowledge flywheel)
+    components = _get_components()
+    qe = components.get("query_engine")
+
     # Run the sync pipeline in a thread
     result = await asyncio.to_thread(
         run_research_pipeline,
@@ -246,10 +250,9 @@ async def start_research(
         progress_callback=lambda phase, step, total, msg: logger.info(
             "Research [%s] %d/%d: %s", phase, step, total, msg
         ),
+        query_engine=qe,
+        user_id=uid,
     )
-
-    # Store in vector DB
-    components = _get_components()
     doc_meta = {
         "text": result["content_markdown"],
         "source": result["title"],

@@ -98,12 +98,18 @@ class PKBAgentExecutor(AgentExecutor):
                 clean_topic = clean_topic[len(prefix):]
                 break
 
+        # Get query engine for PKB search (knowledge flywheel)
+        components = _get_components()
+        qe = components.get("query_engine")
+
         result = await asyncio.to_thread(
             run_research_pipeline,
             topic=clean_topic,
             progress_callback=lambda phase, step, total, msg: logger.info(
                 "A2A Research [%s] %d/%d: %s", phase, step, total, msg
             ),
+            query_engine=qe,
+            user_id=self.user_id,
         )
 
         # Store in vector DB + SQLite

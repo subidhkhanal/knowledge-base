@@ -79,18 +79,35 @@ def analyze_research(
 
 
 def _format_research_bank(research_bank: list) -> str:
-    """Format the research bank into readable text for the LLM."""
+    """Format the research bank into readable text for the LLM.
+
+    Separates PKB (existing knowledge) and web findings so the analyzer
+    knows what the user already had vs what's new from the web.
+    """
     formatted = ""
     for subtopic in research_bank:
         formatted += f"\n\n### {subtopic['heading']}\n"
-        formatted += f"Angle: {subtopic['angle']}\n\n"
+        formatted += f"Angle: {subtopic['angle']}\n"
+
+        pkb_count = subtopic.get("pkb_sources", 0)
+        web_count = subtopic.get("web_sources", 0)
+        if pkb_count > 0:
+            formatted += f"(Found {pkb_count} existing PKB sources + {web_count} web sources)\n\n"
+        else:
+            formatted += "\n"
 
         for finding in subtopic["findings"]:
-            formatted += f"Query: {finding['query']}\n"
+            source_type = finding.get("source_type", "web")
+            if source_type == "pkb":
+                formatted += "**FROM YOUR EXISTING KNOWLEDGE BASE:**\n"
+            else:
+                formatted += f"Query: {finding['query']}\n"
+
             if finding.get("tavily_answer"):
                 formatted += f"Summary: {finding['tavily_answer']}\n"
             for result in finding.get("results", [])[:3]:
-                formatted += f"- [{result['title']}]({result['url']})\n"
+                prefix = "[PKB] " if source_type == "pkb" else ""
+                formatted += f"- {prefix}[{result['title']}]({result['url']})\n"
                 formatted += f"  {result['content'][:500]}\n"
 
         for article in subtopic.get("full_articles", []):
