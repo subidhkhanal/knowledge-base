@@ -6,9 +6,10 @@ interface ChatInputProps {
   onSubmit: (message: string) => void;
   isLoading: boolean;
   compact?: boolean;
+  placeholder?: string;
 }
 
-export function ChatInput({ onSubmit, isLoading, compact }: ChatInputProps) {
+export function ChatInput({ onSubmit, isLoading, compact, placeholder }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -56,7 +57,7 @@ export function ChatInput({ onSubmit, isLoading, compact }: ChatInputProps) {
                 }
               }
             }}
-            placeholder="Ask me anything about your documents..."
+            placeholder={placeholder || "Ask me anything about your documents..."}
             className="flex-1 bg-transparent text-sm outline-none resize-none leading-relaxed"
             style={{
               color: "var(--text-primary)",

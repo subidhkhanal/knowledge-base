@@ -21,6 +21,32 @@ function getSlugFromPath(pathname: string): string | null {
   return match ? match[1] : null;
 }
 
+function formatSlug(slug: string): string {
+  return decodeURIComponent(slug)
+    .replace(/-[0-9a-f]{8,}$/i, "") // strip trailing UUID/hash suffix
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function getPillPlaceholder(pathname: string): string {
+  // /projects
+  if (pathname === "/projects") return "Ask about all projects...";
+
+  // /projects/[slug]/articles/[articleSlug]
+  const articleMatch = pathname.match(/^\/projects\/[^/]+\/articles\/([^/]+)/);
+  if (articleMatch) return `Ask about ${formatSlug(articleMatch[1])}...`;
+
+  // /projects/[slug]/documents/[docId]
+  const docMatch = pathname.match(/^\/projects\/[^/]+\/documents\/[^/]+/);
+  if (docMatch) return "Ask about this document...";
+
+  // /projects/[slug]
+  const projectMatch = pathname.match(/^\/projects\/([^/]+)/);
+  if (projectMatch) return `Ask about ${formatSlug(projectMatch[1])}...`;
+
+  return "Ask about your documents...";
+}
+
 export function ChatWidget() {
   const pathname = usePathname();
   const { isLoggedIn, isLoading: authLoading } = useAuth();
@@ -382,11 +408,13 @@ export function ChatWidget() {
                   messages={messages}
                   onSourceClick={handleSourceClick}
                   compact
+                  placeholder={getPillPlaceholder(pathname)}
                 />
                 <ChatInput
                   onSubmit={handleSubmit}
                   isLoading={isChatLoading}
                   compact
+                  placeholder={getPillPlaceholder(pathname)}
                 />
               </div>
             </div>
@@ -432,7 +460,7 @@ export function ChatWidget() {
               className="text-sm hidden sm:inline"
               style={{ color: "var(--text-tertiary)" }}
             >
-              {slug ? "Ask about this project..." : "Ask about your documents..."}
+              {getPillPlaceholder(pathname)}
             </span>
 
             {/* Arrow */}

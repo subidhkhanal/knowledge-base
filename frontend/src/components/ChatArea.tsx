@@ -10,9 +10,10 @@ interface ChatAreaProps {
   messages: Message[];
   onSourceClick: (source: Source) => void;
   compact?: boolean;
+  placeholder?: string;
 }
 
-export function ChatArea({ messages, onSourceClick, compact }: ChatAreaProps) {
+export function ChatArea({ messages, onSourceClick, compact, placeholder }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLElement>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -72,7 +73,7 @@ export function ChatArea({ messages, onSourceClick, compact }: ChatAreaProps) {
             compact ? (
               <div className="flex h-full flex-col items-center justify-center py-12 text-center">
                 <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  Ask anything about your documents...
+                  {placeholder || "Ask anything about your documents..."}
                 </p>
               </div>
             ) : (
