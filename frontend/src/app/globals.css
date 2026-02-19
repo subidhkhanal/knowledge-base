@@ -32,6 +32,10 @@
   --error: #dc2626;
   --error-bg: rgba(220, 38, 38, 0.06);
 
+  /* Reading preferences (overridden by SettingsContext at runtime) */
+  --font-reading: var(--font-vollkorn), Georgia, "Times New Roman", serif;
+  --font-size-reading: 0.9375rem;
+
   /* Shadows - soft light-mode elevation */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.06);
@@ -192,7 +196,8 @@ input[type="email"]:focus {
 /* Markdown prose styles for chat messages */
 .prose-chat {
   color: var(--text-primary);
-  font-size: 0.9375rem;
+  font-family: var(--font-reading);
+  font-size: var(--font-size-reading);
   line-height: 1.75;
   max-width: 100%;
 }
@@ -322,7 +327,8 @@ input[type="email"]:focus {
 
 .article-html {
   color: var(--text-primary);
-  font-size: 0.9375rem;
+  font-family: var(--font-reading);
+  font-size: var(--font-size-reading);
   line-height: 1.75;
   max-width: 100%;
 }

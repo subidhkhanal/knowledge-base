@@ -1,11 +1,29 @@
 import type { Metadata, Viewport } from "next";
-import { Vollkorn } from "next/font/google";
+import { Vollkorn, Merriweather, Lora, Inter } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { Providers } from "./Providers";
 import "./globals.css";
 
 const vollkorn = Vollkorn({
   variable: "--font-vollkorn",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const merriweather = Merriweather({
+  variable: "--font-merriweather",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
+const lora = Lora({
+  variable: "--font-lora",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -42,7 +60,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${vollkorn.variable} ${geistMono.variable}`}>
+      <body className={`${vollkorn.variable} ${merriweather.variable} ${lora.variable} ${inter.variable} ${geistMono.variable}`}>
         <Providers>{children}</Providers>
       </body>
     </html>
