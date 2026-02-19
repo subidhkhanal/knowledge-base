@@ -60,6 +60,7 @@ async def publish_conversation(
                 content_markdown=result["structured_content"],
                 chunks_count=result["chunks_count"],
                 conversation_length=result["conversation_length"],
+                content_html=result.get("content_html"),
             )
         else:
             await db.insert_article(
@@ -72,6 +73,7 @@ async def publish_conversation(
                 chunks_count=result["chunks_count"],
                 conversation_length=result["conversation_length"],
                 project_id=project_id,
+                content_html=result.get("content_html"),
             )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -158,6 +160,7 @@ async def update_article(
         content_markdown=result["structured_content"],
         chunks_count=result["chunks_count"],
         conversation_length=result["conversation_length"],
+        content_html=result.get("content_html"),
     )
 
     return PublishResponse(

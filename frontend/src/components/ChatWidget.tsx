@@ -8,6 +8,7 @@ import { useApi } from "@/hooks/useApi";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { ChatArea } from "./ChatArea";
 import { ChatInput } from "./ChatInput";
+import type { ChatMode } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import type { Source } from "@/types/chat";
 
@@ -69,6 +70,7 @@ export function ChatWidget() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
+  const [mode, setMode] = useState<ChatMode>("rag");
 
   const tokenQueueRef = useRef<
     { content: string; type: string; sources?: Source[]; provider?: string }[]
@@ -211,6 +213,7 @@ export function ChatWidget() {
         body: JSON.stringify({
           question: inputText,
           chat_history: chatHistory.length > 0 ? chatHistory : undefined,
+          mode,
         }),
       });
 
@@ -415,6 +418,8 @@ export function ChatWidget() {
                   isLoading={isChatLoading}
                   compact
                   placeholder={getPillPlaceholder(pathname)}
+                  mode={mode}
+                  onModeChange={setMode}
                 />
               </div>
             </div>

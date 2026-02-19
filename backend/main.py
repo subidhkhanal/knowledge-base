@@ -170,6 +170,7 @@ class QueryRequest(BaseModel):
     source_filter: Optional[str] = None
     chat_history: Optional[List[dict]] = None
     conversation_id: Optional[int] = None
+    mode: str = "rag"  # "rag" | "llm"
 
 
 class TextUploadRequest(BaseModel):

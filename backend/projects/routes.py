@@ -197,6 +197,7 @@ async def project_scoped_query(
     top_k = body.get("top_k", 5)
     threshold = body.get("threshold", 0.3)
     chat_history = body.get("chat_history")
+    mode = body.get("mode", "rag")
 
     # Verify project exists
     user_id = current_user["user_id"] if current_user else None
@@ -223,42 +224,63 @@ async def project_scoped_query(
     async def event_stream():
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
 
-        qe = components["query_engine"]
+        if mode == "llm":
+            # Direct LLM mode — no retrieval
+            system_prompt = "You are a helpful assistant. Answer the user's question directly and concisely."
+            route_handlers = components.get("route_handlers")
+            if groq_api_key:
+                from backend.routing import RouteHandlers
+                rh = RouteHandlers(groq_api_key=groq_api_key)
+            elif route_handlers:
+                rh = route_handlers
+            else:
+                rh = None
 
-        # Retrieve with project-scoped filtering
-        # We search across all user's content but filter by article titles from this project
-        all_chunks = []
-        for title in article_titles:
-            chunks, _ = qe.retrieve(
-                question=question,
-                top_k=top_k,
-                threshold=threshold,
-                source_filter=title,
-                user_id=user_id_str,
-            )
-            all_chunks.extend(chunks)
+            if rh:
+                try:
+                    for token in rh._call_llm_stream(system_prompt, question):
+                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                except Exception:
+                    yield f"data: {json.dumps({'type': 'token', 'content': 'Unable to generate a response. Please check your API keys.'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'token', 'content': 'LLM not available. Please check your API keys.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'groq'})}\n\n"
+        else:
+            # RAG mode — retrieve and generate
+            qe = components["query_engine"]
 
-        # Also search without source filter but limit to project's content
-        # This catches documents uploaded to the project
-        if not all_chunks:
-            all_chunks, _ = qe.retrieve(
-                question=question,
-                top_k=top_k,
-                threshold=threshold,
-                user_id=user_id_str,
-            )
+            # Retrieve with project-scoped filtering
+            all_chunks = []
+            for title in article_titles:
+                chunks, _ = qe.retrieve(
+                    question=question,
+                    top_k=top_k,
+                    threshold=threshold,
+                    source_filter=title,
+                    user_id=user_id_str,
+                )
+                all_chunks.extend(chunks)
 
-        # Sort by similarity and take top_k
-        all_chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
-        chunks = all_chunks[:top_k]
+            # Also search without source filter but limit to project's content
+            if not all_chunks:
+                all_chunks, _ = qe.retrieve(
+                    question=question,
+                    top_k=top_k,
+                    threshold=threshold,
+                    user_id=user_id_str,
+                )
 
-        # Use per-request LLM if available, otherwise default
-        llm = active_llm or qe.llm
-        async for event in llm.generate_response_stream(
-            query=question,
-            chunks=chunks,
-        ):
-            yield f"data: {json.dumps(event)}\n\n"
+            # Sort by similarity and take top_k
+            all_chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+            chunks = all_chunks[:top_k]
+
+            # Use per-request LLM if available, otherwise default
+            llm = active_llm or qe.llm
+            async for event in llm.generate_response_stream(
+                query=question,
+                chunks=chunks,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(
         event_stream(),
