@@ -1,209 +1,75 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { AnimatePresence } from "framer-motion";
-import { useApi } from "@/hooks/useApi";
-import { useChatHistory } from "@/hooks/useChatHistory";
-import { useToasts } from "@/hooks/useToasts";
-import { useUpload } from "@/hooks/useUpload";
-import type { Source, ChunkContext } from "@/types/chat";
-import { ToastContainer } from "@/components/Toast";
-import { SourceModal } from "@/components/SourceModal";
-import { UploadModal } from "@/components/UploadModal";
+import Link from "next/link";
+import { motion } from "framer-motion";
 import { Header } from "@/components/Header";
-import { Sidebar } from "@/components/Sidebar";
-import { ChatArea } from "@/components/ChatArea";
-import { ChatInput } from "@/components/ChatInput";
+import { ProjectsView } from "@/components/ProjectsView";
+import { useAuth } from "@/contexts/AuthContext";
+
+const containerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.12 } },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
+  },
+};
+
+const features = [
+  {
+    title: "Save AI Conversations",
+    description:
+      "Copy a conversation from Claude or ChatGPT, paste it into the browser extension, and it gets structured into a readable article and indexed for search.",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Clip Web Articles",
+    description:
+      "Open any webpage and the extension auto-extracts the article. One click to save it to your knowledge base with tags and project.",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+      </svg>
+    ),
+  },
+  {
+    title: "Upload Documents",
+    description:
+      "Import PDFs, EPUBs, Word documents, HTML, and plain text. Each gets chunked and indexed so you can search inside them.",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+    ),
+  },
+  {
+    title: "Ask Your Knowledge Base",
+    description:
+      "Ask questions in plain English. Hybrid search finds the most relevant chunks across everything you've saved, and an LLM answers with citations.",
+    icon: (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.5 9.5l1.5-1.5m0 0l1.5 1.5M11 8v4" />
+      </svg>
+    ),
+  },
+];
+
 export default function Home() {
-  const { apiFetch } = useApi();
-  const {
-    messages,
-    setMessages,
-    conversations,
-    currentConversationId,
-    createConversation,
-    selectConversation,
-    deleteConversation,
-    renameConversation,
-    isLoaded,
-  } = useChatHistory();
+  const { isLoggedIn, isLoading } = useAuth();
 
-  const { toasts, addToast, removeToast, updateToast } = useToasts();
-  const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
-
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedSource, setSelectedSource] = useState<Source | null>(null);
-  const [chunkContext, setChunkContext] = useState<ChunkContext | null>(null);
-  const [isLoadingContext, setIsLoadingContext] = useState(false);
-
-  const tokenQueueRef = useRef<{ content: string; type: string; sources?: Source[]; provider?: string }[]>([]);
-  const drainIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const startDraining = (assistantId: string) => {
-    if (drainIntervalRef.current) return;
-
-    drainIntervalRef.current = setInterval(() => {
-      const queue = tokenQueueRef.current;
-      if (queue.length === 0) return;
-
-      const item = queue.shift()!;
-
-      if (item.type === "token") {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + item.content } : m
-          )
-        );
-      } else if (item.type === "done") {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, sources: item.sources, provider: item.provider } : m
-          )
-        );
-        clearInterval(drainIntervalRef.current!);
-        drainIntervalRef.current = null;
-      }
-    }, 30);
-  };
-
-  const handleSubmitMessage = async (inputText: string) => {
-    if (isLoading) return;
-
-    const userMessage = {
-      id: Date.now().toString(),
-      role: "user" as const,
-      content: inputText,
-    };
-
-    const assistantId = (Date.now() + 1).toString();
-
-    setMessages((prev) => [
-      ...prev,
-      userMessage,
-      { id: assistantId, role: "assistant" as const, content: "" },
-    ]);
-    setIsLoading(true);
-
-    try {
-      const chatHistory = messages.slice(-6).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      const response = await apiFetch("/api/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: inputText,
-          chat_history: chatHistory.length > 0 ? chatHistory : undefined,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Query failed");
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() || "";
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6);
-          if (!jsonStr) continue;
-
-          try {
-            const data = JSON.parse(jsonStr);
-
-            if (data.type === "token") {
-              const content = data.content;
-              if (content.length > 20) {
-                const words = content.split(/(\s+)/);
-                for (const word of words) {
-                  if (word) tokenQueueRef.current.push({ type: "token", content: word });
-                }
-              } else {
-                tokenQueueRef.current.push({ type: "token", content: content });
-              }
-              startDraining(assistantId);
-            } else if (data.type === "done") {
-              tokenQueueRef.current.push({ type: "done", content: "", sources: data.sources, provider: data.provider });
-            }
-          } catch {
-            // Skip malformed JSON
-          }
-        }
-      }
-    } catch {
-      if (drainIntervalRef.current) {
-        clearInterval(drainIntervalRef.current);
-        drainIntervalRef.current = null;
-      }
-      tokenQueueRef.current = [];
-
-      setMessages((prev) => {
-        const hasAssistant = prev.some((m) => m.id === assistantId);
-        if (hasAssistant) {
-          return prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, content: m.content || "Unable to connect. Please ensure the backend is running." }
-              : m
-          );
-        }
-        return [
-          ...prev,
-          {
-            id: assistantId,
-            role: "assistant" as const,
-            content: "Unable to connect. Please ensure the backend is running.",
-          },
-        ];
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSourceClick = async (source: Source) => {
-    setSelectedSource(source);
-
-    if (source.chunk_id) {
-      setIsLoadingContext(true);
-      try {
-        const response = await apiFetch(`/api/chunks/${source.chunk_id}?context_size=0`);
-        if (response.ok) {
-          const data = await response.json();
-          setChunkContext(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch chunk context:", error);
-      } finally {
-        setIsLoadingContext(false);
-      }
-    }
-  };
-
-  const closeSourceModal = () => {
-    setSelectedSource(null);
-    setChunkContext(null);
-  };
-
-  // Show loading state while chat history is loading
-  if (!isLoaded) {
+  if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center" style={{ background: "var(--bg-primary)" }}>
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--bg-deep)" }}>
         <svg className="h-8 w-8 animate-spin" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -212,46 +78,104 @@ export default function Home() {
     );
   }
 
+  if (isLoggedIn) {
+    return <ProjectsView />;
+  }
+
   return (
-    <div className="flex h-screen flex-col" style={{ background: "var(--bg-primary)" }}>
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    <div className="h-screen overflow-y-auto" style={{ background: "var(--bg-deep)" }}>
+      <Header />
 
-      <AnimatePresence>
-        {showUploadModal && (
-          <UploadModal
-            onClose={() => setShowUploadModal(false)}
-            onUpload={(file, projectId) => uploadFile(file, { projectId })}
-          />
-        )}
-        {selectedSource && (
-          <SourceModal
-            source={selectedSource}
-            chunkContext={chunkContext}
-            isLoadingContext={isLoadingContext}
-            onClose={closeSourceModal}
-          />
-        )}
-      </AnimatePresence>
+      <motion.main
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="mx-auto max-w-3xl px-6"
+      >
+        {/* Hero */}
+        <motion.section variants={itemVariants} className="pt-16 pb-12 text-center md:pt-24 md:pb-16">
+          <div
+            className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl"
+            style={{ background: "linear-gradient(135deg, var(--accent) 0%, #0284c7 100%)" }}
+          >
+            <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
 
-      <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} onUploadClick={() => setShowUploadModal(true)} />
+          <h1
+            className="mb-4 text-3xl font-semibold tracking-tight md:text-4xl"
+            style={{ color: "var(--text-primary)", lineHeight: 1.3 }}
+          >
+            Your personal knowledge base
+          </h1>
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          conversations={conversations}
-          currentConversationId={currentConversationId}
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-          onNewChat={() => createConversation()}
-          onSelectConversation={selectConversation}
-          onDeleteConversation={deleteConversation}
-          onRenameConversation={renameConversation}
-        />
+          <p
+            className="mx-auto mb-8 max-w-xl text-base leading-relaxed md:text-lg"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Save your conversations from Claude and ChatGPT, clip web articles,
+            upload documents — and search across all of it with AI.
+          </p>
 
-        <div className="flex flex-1 flex-col min-w-0 min-h-0">
-          <ChatArea messages={messages} onSourceClick={handleSourceClick} />
-          <ChatInput onSubmit={handleSubmitMessage} isLoading={isLoading} />
-        </div>
-      </div>
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-white"
+            style={{ background: "linear-gradient(135deg, var(--accent) 0%, #0284c7 100%)" }}
+          >
+            Get Started
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+
+          <p className="mt-4 text-xs" style={{ color: "var(--text-tertiary)" }}>
+            A hobby project &middot; open source
+          </p>
+        </motion.section>
+
+        {/* Feature Cards */}
+        <motion.section variants={itemVariants} className="pb-16">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {features.map((feature, i) => (
+              <motion.div
+                key={feature.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.4 + i * 0.08 }}
+                className="flex flex-col gap-3 rounded-xl p-5"
+                style={{
+                  background: "var(--bg-primary)",
+                  border: "1px solid var(--border)",
+                  boxShadow: "var(--shadow-card)",
+                }}
+              >
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-lg"
+                  style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}
+                >
+                  {feature.icon}
+                </div>
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  {feature.title}
+                </h3>
+                <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  {feature.description}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+        {/* Footer */}
+        <motion.footer variants={itemVariants} className="pb-12 pt-4">
+          <div style={{ borderTop: "1px solid var(--border)" }} className="pt-6 text-center">
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+              Built as a hobby project &middot; open source on GitHub
+            </p>
+          </div>
+        </motion.footer>
+      </motion.main>
     </div>
   );
 }

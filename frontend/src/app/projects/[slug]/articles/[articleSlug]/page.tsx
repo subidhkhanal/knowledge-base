@@ -2,7 +2,6 @@
 
 import { use } from "react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
 import { Header } from "@/components/Header";
 import { useArticle } from "@/hooks/useArticles";
 import { useApi } from "@/hooks/useApi";
@@ -221,9 +220,12 @@ function ArticleReaderContent({
             />
 
             {/* Content */}
-            <div className="prose-chat">
-              <ReactMarkdown>{article.content_markdown}</ReactMarkdown>
-            </div>
+            <div
+              className="article-html"
+              dangerouslySetInnerHTML={{
+                __html: article.content_html || article.content_markdown,
+              }}
+            />
           </article>
         )}
       </main>
