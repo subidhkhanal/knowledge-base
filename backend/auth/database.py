@@ -47,3 +47,7 @@ async def init_db():
     # Create articles table (separate module manages it)
     from backend.articles.database import create_articles_table
     await create_articles_table()
+
+    # Create documents table (tracks uploaded files on disk)
+    from backend.documents.database import create_documents_table
+    await create_documents_table()

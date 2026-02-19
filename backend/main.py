@@ -18,7 +18,7 @@ from backend.retrieval import QueryEngine
 from backend.retrieval.bm25_index import BM25Index
 from backend.config import (
     MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING, SQLITE_DB_PATH,
-    CHUNKING_METHOD, USE_HYBRID_RETRIEVAL
+    CHUNKING_METHOD, USE_HYBRID_RETRIEVAL, UPLOADS_DIR
 )
 from backend.routing import QueryRouter, RouteHandlers
 from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_user, get_optional_user
@@ -26,6 +26,7 @@ from backend.auth.database import init_db, get_db
 from backend.conversations import ConversationService
 from backend.articles import articles_router
 from backend.projects import projects_router
+from backend.documents import documents_router
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -46,11 +47,13 @@ app.add_middleware(
 # Mount article publishing routes
 app.include_router(articles_router)
 app.include_router(projects_router)
+app.include_router(documents_router)
 
 
 @app.on_event("startup")
 async def startup():
     os.makedirs(os.path.dirname(SQLITE_DB_PATH), exist_ok=True)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
     await init_db()
 
 
@@ -193,6 +196,7 @@ class UploadResponse(BaseModel):
     message: str
     source: str
     chunks_created: int
+    document_id: Optional[int] = None
 
 
 # Health check endpoint (responds immediately, no heavy loading, no auth)
@@ -331,10 +335,43 @@ async def upload_document(
         bm25_index.add_chunks(bm25_items)
         bm25_index.save()
 
+    # Save original file to disk for the document reader
+    import uuid as _uuid
+    from backend.documents.database import insert_document
+
+    MIME_MAP = {
+        ".pdf": "application/pdf",
+        ".epub": "application/epub+zip",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".html": "text/html",
+        ".htm": "text/html",
+        ".txt": "text/plain",
+        ".md": "text/markdown",
+        ".markdown": "text/markdown",
+    }
+
+    storage_filename = f"{_uuid.uuid4().hex}{ext}"
+    storage_path = os.path.join(UPLOADS_DIR, storage_filename)
+    with open(storage_path, "wb") as f:
+        f.write(content)
+
+    user_id_int = current_user["user_id"] if current_user else None
+    doc_id = await insert_document(
+        filename=file.filename,
+        storage_path=storage_path,
+        extension=ext,
+        size_bytes=len(content),
+        mime_type=MIME_MAP.get(ext, "application/octet-stream"),
+        user_id=user_id_int,
+        project_id=project_id,
+    )
+
     return UploadResponse(
         message=f"{ext.upper()[1:]} processed successfully",
         source=file.filename,
-        chunks_created=len(chunks)
+        chunks_created=len(chunks),
+        document_id=doc_id,
     )
 
 

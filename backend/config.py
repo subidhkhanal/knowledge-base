@@ -19,6 +19,7 @@ SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", str(BASE_DIR / "data" / "app.db"))
 # Upload settings
 MAX_UPLOAD_SIZE_MB = 10
 MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # 10 MB in bytes
+UPLOADS_DIR = os.getenv("UPLOADS_DIR", str(BASE_DIR / "data" / "uploads"))
 
 # Chunking settings
 CHUNK_SIZE = 800  # tokens

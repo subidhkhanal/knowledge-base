@@ -10,6 +10,7 @@ from backend.auth import get_optional_user
 from backend.projects.models import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectDetailResponse
 from backend.projects import database as db
 from backend.articles import database as articles_db
+from backend.documents import database as documents_db
 
 # All endpoints use get_optional_user because the frontend has no auth system.
 # This matches the pattern used by all other endpoints (upload, query, articles, etc.).
@@ -110,6 +111,23 @@ async def get_project_detail(
                 documents.append(source)
     except Exception:
         pass
+
+    # Enrich documents with document_id from SQLite for reader links
+    sqlite_docs = await documents_db.get_documents_by_project(project["id"])
+    doc_id_map = {d["filename"]: d["id"] for d in sqlite_docs}
+    for doc in documents:
+        doc["document_id"] = doc_id_map.get(doc.get("source"))
+
+    # Add any SQLite documents not yet in Pinecone
+    existing_sources = {d.get("source") for d in documents}
+    for sd in sqlite_docs:
+        if sd["filename"] not in existing_sources:
+            documents.append({
+                "source": sd["filename"],
+                "source_type": sd["extension"].lstrip("."),
+                "chunk_count": 0,
+                "document_id": sd["id"],
+            })
 
     return {
         **project,

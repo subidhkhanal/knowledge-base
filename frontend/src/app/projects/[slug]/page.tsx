@@ -295,52 +295,68 @@ function ProjectDetailContent({ slug }: { slug: string }) {
 
                 {project.documents.length > 0 && (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {project.documents.map((document, index) => (
-                      <motion.div
-                        key={document.source}
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: 0.6,
-                          ease: [0.16, 1, 0.3, 1],
-                          delay: index * 0.05,
-                        }}
-                        className="flex flex-col gap-3 rounded-xl p-4"
-                        style={{
-                          background: "var(--bg-secondary)",
-                          border: "1px solid var(--border)",
-                          boxShadow: "var(--shadow-card)",
-                        }}
-                      >
-                        {/* Type badge */}
-                        <span
-                          className="inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                          style={{
-                            background: document.source_type === "pdf" ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)",
-                            color: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                    {project.documents.map((document, index) => {
+                      const card = (
+                        <motion.div
+                          key={document.source}
+                          initial={{ opacity: 0, y: 24 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            duration: 0.6,
+                            ease: [0.16, 1, 0.3, 1],
+                            delay: index * 0.05,
                           }}
+                          className={`flex flex-col gap-3 rounded-xl p-4${document.document_id ? " cursor-pointer" : ""}`}
+                          style={{
+                            background: "var(--bg-secondary)",
+                            border: "1px solid var(--border)",
+                            boxShadow: "var(--shadow-card)",
+                          }}
+                          onMouseEnter={document.document_id ? (e) => {
+                            e.currentTarget.style.borderColor = "var(--border-hover)";
+                          } : undefined}
+                          onMouseLeave={document.document_id ? (e) => {
+                            e.currentTarget.style.borderColor = "var(--border)";
+                          } : undefined}
                         >
+                          {/* Type badge */}
                           <span
-                            className="h-1.5 w-1.5 rounded-full"
+                            className="inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
                             style={{
-                              background: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                              background: document.source_type === "pdf" ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)",
+                              color: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
                             }}
-                          />
-                          {document.source_type === "pdf" ? "PDF" : "Document"}
-                        </span>
+                          >
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{
+                                background: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                              }}
+                            />
+                            {document.source_type === "pdf" ? "PDF" : "Document"}
+                          </span>
 
-                        <h3
-                          className="text-sm font-medium leading-snug line-clamp-2"
-                          style={{ color: "var(--text-primary)" }}
-                        >
-                          {document.source}
-                        </h3>
+                          <h3
+                            className="text-sm font-medium leading-snug line-clamp-2"
+                            style={{ color: "var(--text-primary)" }}
+                          >
+                            {document.source}
+                          </h3>
 
-                        <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          {document.chunk_count} {document.chunk_count === 1 ? "chunk" : "chunks"}
-                        </div>
-                      </motion.div>
-                    ))}
+                          <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            {document.chunk_count} {document.chunk_count === 1 ? "chunk" : "chunks"}
+                          </div>
+                        </motion.div>
+                      );
+
+                      return document.document_id ? (
+                        <Link key={document.source} href={`/reader/${document.document_id}`}>
+                          {card}
+                        </Link>
+                      ) : (
+                        <div key={document.source}>{card}</div>
+                      );
+                    })}
                   </div>
                 )}
               </section>

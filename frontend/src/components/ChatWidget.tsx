@@ -14,7 +14,6 @@ import type { Source } from "@/types/chat";
 const HIDDEN_PATHS = ["/", "/login"];
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 320;
-const MAX_WIDTH = 700;
 const WIDGET_STORAGE_KEY = "kb_widget_conversations";
 
 function getSlugFromPath(pathname: string): string | null {
@@ -80,7 +79,7 @@ export function ChatWidget() {
   const handleResizeMove = useCallback(
     (e: MouseEvent) => {
       const newWidth = window.innerWidth - e.clientX;
-      setPanelWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth)));
+      setPanelWidth(Math.max(MIN_WIDTH, newWidth));
     },
     []
   );

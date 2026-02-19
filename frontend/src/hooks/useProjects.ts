@@ -55,6 +55,7 @@ export interface ProjectDetail extends ProjectListItem {
     source: string;
     source_type: string;
     chunk_count: number;
+    document_id?: number;
   }>;
 }
 
