@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from typing import Optional
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
@@ -102,9 +103,11 @@ class PKBAgentExecutor(AgentExecutor):
         components = _get_components()
         qe = components.get("query_engine")
 
+        # A2A mode: use env vars for API keys (no HTTP headers available)
         result = await asyncio.to_thread(
             run_research_pipeline,
             topic=clean_topic,
+            tavily_api_key=os.getenv("TAVILY_API_KEY", ""),
             progress_callback=lambda phase, step, total, msg: logger.info(
                 "A2A Research [%s] %d/%d: %s", phase, step, total, msg
             ),

@@ -15,12 +15,14 @@ from backend.config import TAVILY_API_KEY
 logger = logging.getLogger(__name__)
 
 
-def _get_tavily_client() -> TavilyClient:
-    if not TAVILY_API_KEY:
+def _get_tavily_client(tavily_api_key: Optional[str] = None) -> TavilyClient:
+    key = tavily_api_key or TAVILY_API_KEY
+    if not key:
         raise ValueError(
-            "TAVILY_API_KEY is required. Get one at https://tavily.com"
+            "Tavily API key is required for web research. "
+            "Add it in Settings or set TAVILY_API_KEY env var."
         )
-    return TavilyClient(api_key=TAVILY_API_KEY)
+    return TavilyClient(api_key=key)
 
 
 def search_pkb(
@@ -159,6 +161,7 @@ def research_subtopic(
 
 def execute_research_plan(
     plan: dict,
+    tavily_api_key: Optional[str] = None,
     query_engine: Any = None,
     user_id: Optional[str] = None,
     progress_callback: Optional[Callable] = None,
@@ -168,6 +171,7 @@ def execute_research_plan(
 
     Args:
         plan: Output from create_research_plan()
+        tavily_api_key: Optional user-provided Tavily API key
         query_engine: Optional QueryEngine for PKB search
         user_id: Optional user ID for PKB data isolation
         progress_callback: Optional callable(step, total, message)
@@ -175,7 +179,7 @@ def execute_research_plan(
     Returns:
         List of researched subtopics with all findings (PKB + web)
     """
-    tavily = _get_tavily_client()
+    tavily = _get_tavily_client(tavily_api_key)
     research_bank = []
     total = len(plan["subtopics"])
     total_pkb_sources = 0

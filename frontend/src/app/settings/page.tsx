@@ -7,10 +7,12 @@ import { Header } from "@/components/Header";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { isLoggedIn, isLoading, username, groqApiKey, setGroqKey, logout } = useAuth();
+  const { isLoggedIn, isLoading, username, groqApiKey, setGroqKey, tavilyApiKey, setTavilyKey, logout } = useAuth();
 
   const [keyInput, setKeyInput] = useState("");
   const [saved, setSaved] = useState(false);
+  const [tavilyInput, setTavilyInput] = useState("");
+  const [tavilySaved, setTavilySaved] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isLoggedIn) {
@@ -22,6 +24,10 @@ export default function SettingsPage() {
     if (groqApiKey) setKeyInput(groqApiKey);
   }, [groqApiKey]);
 
+  useEffect(() => {
+    if (tavilyApiKey) setTavilyInput(tavilyApiKey);
+  }, [tavilyApiKey]);
+
   if (isLoading || !isLoggedIn) return null;
 
   function handleSave() {
@@ -30,6 +36,14 @@ export default function SettingsPage() {
     setGroqKey(key);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  function handleTavilySave() {
+    const key = tavilyInput.trim();
+    if (!key) return;
+    setTavilyKey(key);
+    setTavilySaved(true);
+    setTimeout(() => setTavilySaved(false), 2000);
   }
 
   return (
@@ -70,7 +84,7 @@ export default function SettingsPage() {
 
         {/* Groq API Key */}
         <section
-          className="rounded-xl p-5"
+          className="mb-6 rounded-xl p-5"
           style={{ background: "var(--bg-primary)", border: "1px solid var(--border)" }}
         >
           <h2 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -110,6 +124,51 @@ export default function SettingsPage() {
               }}
             >
               {saved ? "Saved!" : "Save"}
+            </button>
+          </div>
+        </section>
+
+        {/* Tavily API Key */}
+        <section
+          className="rounded-xl p-5"
+          style={{ background: "var(--bg-primary)", border: "1px solid var(--border)" }}
+        >
+          <h2 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            Tavily API Key
+          </h2>
+          <p className="mb-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
+            Required for Deep Research (web search). Get a free key at{" "}
+            <a
+              href="https://tavily.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--accent)" }}
+            >
+              tavily.com
+            </a>
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={tavilyInput}
+              onChange={(e) => setTavilyInput(e.target.value)}
+              placeholder="tvly-..."
+              className="flex-1 rounded-lg px-3 py-2 text-sm"
+              style={{
+                background: "var(--bg-primary)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            />
+            <button
+              onClick={handleTavilySave}
+              disabled={!tavilyInput.trim() || tavilyInput.trim() === tavilyApiKey}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-white cursor-pointer disabled:opacity-50"
+              style={{
+                background: tavilySaved ? "#16a34a" : "var(--accent)",
+              }}
+            >
+              {tavilySaved ? "Saved!" : "Save"}
             </button>
           </div>
         </section>

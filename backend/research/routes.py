@@ -44,6 +44,7 @@ async def stream_research(
     - {"type": "error", "message": "..."}
     """
     groq_api_key = http_request.headers.get("x-groq-api-key")
+    tavily_api_key = http_request.headers.get("x-tavily-api-key")
     user_id = current_user["user_id"]
 
     # Resolve project_slug to project_id if provided
@@ -83,6 +84,7 @@ async def stream_research(
                     run_research_pipeline,
                     topic=request.topic,
                     groq_api_key=groq_api_key,
+                    tavily_api_key=tavily_api_key,
                     progress_callback=progress_callback,
                     query_engine=qe,
                     user_id=user_id_str,

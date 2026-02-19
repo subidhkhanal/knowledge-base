@@ -37,6 +37,7 @@ def extract_tags(plan: dict, topic: str) -> list:
 def run_research_pipeline(
     topic: str,
     groq_api_key: Optional[str] = None,
+    tavily_api_key: Optional[str] = None,
     progress_callback: Optional[Callable] = None,
     query_engine: Any = None,
     user_id: Optional[str] = None,
@@ -51,6 +52,7 @@ def run_research_pipeline(
     Args:
         topic: The research topic
         groq_api_key: Optional user-provided Groq key
+        tavily_api_key: Optional user-provided Tavily key
         progress_callback: Optional callable(phase, step, total, message)
         query_engine: Optional QueryEngine for PKB search (knowledge flywheel)
         user_id: Optional user ID for PKB data isolation
@@ -95,6 +97,7 @@ def run_research_pipeline(
 
     research_bank = execute_research_plan(
         plan,
+        tavily_api_key=tavily_api_key,
         query_engine=query_engine,
         user_id=user_id,
         progress_callback=research_progress,

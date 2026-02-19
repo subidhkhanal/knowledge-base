@@ -244,9 +244,11 @@ async def start_research(
     qe = components.get("query_engine")
 
     # Run the sync pipeline in a thread
+    # MCP mode: use env vars for API keys (no HTTP headers available)
     result = await asyncio.to_thread(
         run_research_pipeline,
         topic=topic,
+        tavily_api_key=os.getenv("TAVILY_API_KEY", ""),
         progress_callback=lambda phase, step, total, msg: logger.info(
             "Research [%s] %d/%d: %s", phase, step, total, msg
         ),
