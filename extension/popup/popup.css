@@ -1,4 +1,4 @@
-/* Chatbot to Webpage Extension Popup — Light Theme */
+/* Chat to Webpage Extension Popup — Light Theme */
 
 * {
   margin: 0;
@@ -12,6 +12,16 @@ body {
   background: #f8fafc;
   color: #1e293b;
   padding: 16px;
+}
+
+/* ─── Views ─── */
+
+.view {
+  display: block;
+}
+
+.hidden {
+  display: none !important;
 }
 
 /* ─── Header ─── */
@@ -37,6 +47,87 @@ h1 {
   color: #fff;
   font-weight: 700;
   font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* ─── Header Bar (Main View) ─── */
+
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.header-bar h1 {
+  margin-bottom: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.username-badge {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.btn-icon {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+
+/* ─── Auth Tabs ─── */
+
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: #f1f5f9;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auth-tab:first-child {
+  border-right: 1px solid #e2e8f0;
+}
+
+.auth-tab.active {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+.auth-tab:hover:not(.active) {
+  background: #e2e8f0;
 }
 
 /* ─── Status indicator ─── */
@@ -49,6 +140,7 @@ h1 {
   font-size: 13px;
   border: 1px solid #e2e8f0;
   color: #64748b;
+  display: none;
 }
 
 .status.success {
@@ -63,6 +155,10 @@ h1 {
   background: rgba(220, 38, 38, 0.06);
 }
 
+#scrape-status {
+  display: block;
+}
+
 /* ─── Form elements ─── */
 
 label {
@@ -72,6 +168,10 @@ label {
   margin-bottom: 4px;
   margin-top: 10px;
   font-weight: 500;
+}
+
+label:first-of-type {
+  margin-top: 0;
 }
 
 input,
@@ -100,6 +200,23 @@ input::placeholder {
 
 #slug-group {
   display: none;
+}
+
+/* ─── Helper Text ─── */
+
+.helper-text {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.helper-text a {
+  color: #0ea5e9;
+  text-decoration: none;
+}
+
+.helper-text a:hover {
+  text-decoration: underline;
 }
 
 /* ─── Buttons ─── */

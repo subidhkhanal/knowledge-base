@@ -29,6 +29,7 @@ def publish_article(
     vector_store: Any,
     bm25_index: Optional[Any] = None,
     update_slug: Optional[str] = None,
+    groq_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Full publish pipeline (synchronous LLM call, async DB handled by caller).
@@ -39,7 +40,7 @@ def publish_article(
     slug = update_slug or generate_slug(title)
 
     # 1. Structure conversation with LLM
-    structured_content = structure_conversation(conversation, title)
+    structured_content = structure_conversation(conversation, title, groq_api_key=groq_api_key)
 
     # 2. Prepare documents for the chunker (same format as upload pipeline)
     documents = [{

@@ -1,6 +1,6 @@
 """FastAPI router for article endpoints. Thin layer — delegates to publisher and database."""
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 
 from backend.auth import get_current_user, get_optional_user
 from backend.articles.models import PublishRequest, PublishResponse
@@ -19,10 +19,12 @@ def _get_components():
 @router.post("/publish", response_model=PublishResponse)
 async def publish_conversation(
     request: PublishRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Convert a conversation into a structured article and store it."""
     components = _get_components()
+    groq_api_key = http_request.headers.get("x-groq-api-key")
 
     try:
         result = publish_article(
@@ -35,7 +37,10 @@ async def publish_conversation(
             vector_store=components["vector_store"],
             bm25_index=components.get("bm25_index"),
             update_slug=request.update_slug,
+            groq_api_key=groq_api_key,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Publishing failed: {str(e)}")
 
@@ -93,6 +98,7 @@ async def get_article_detail(
 async def update_article(
     slug: str,
     request: PublishRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Update an existing article with new conversation content."""
@@ -102,6 +108,7 @@ async def update_article(
         raise HTTPException(status_code=404, detail="Article not found")
 
     components = _get_components()
+    groq_api_key = http_request.headers.get("x-groq-api-key")
 
     # Delete old vectors first
     try:
@@ -125,7 +132,10 @@ async def update_article(
             vector_store=components["vector_store"],
             bm25_index=components.get("bm25_index"),
             update_slug=slug,
+            groq_api_key=groq_api_key,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 

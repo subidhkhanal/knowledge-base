@@ -4,78 +4,116 @@
     <meta charset="UTF-8" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Vollkorn:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vollkorn:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <h1><span class="logo">P</span> Personal Knowledge Base</h1>
+    <!-- ═══ Auth View ═══ -->
+    <div id="auth-view" class="view">
+      <h1><span class="logo">C</span> Chat to Webpage</h1>
 
-    <!-- Scrape status indicator -->
-    <div class="status" id="scrape-status">Detecting conversation...</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login">Login</button>
+        <button class="auth-tab" data-tab="register">Register</button>
+      </div>
 
-    <!-- Publish form -->
-    <label for="title">Title</label>
-    <input
-      type="text"
-      id="title"
-      placeholder="e.g., Understanding Hybrid Search"
-    />
+      <div id="auth-status" class="status"></div>
 
-    <label for="tags">Tags (comma separated)</label>
-    <input type="text" id="tags" placeholder="e.g., rag, search, embeddings" />
+      <label for="auth-username">Username</label>
+      <input
+        type="text"
+        id="auth-username"
+        placeholder="Your username"
+        autocomplete="username"
+      />
 
-    <label for="mode">Mode</label>
-    <select id="mode">
-      <option value="new">Publish New Article</option>
-      <option value="update">Update Existing</option>
-    </select>
+      <label for="auth-password">Password</label>
+      <input
+        type="password"
+        id="auth-password"
+        placeholder="Your password"
+        autocomplete="current-password"
+      />
 
-    <div id="slug-group">
-      <label for="existing-slug">Select Article to Update</label>
-      <select id="existing-slug">
-        <option value="">Loading...</option>
-      </select>
+      <label for="auth-groq-key">Groq API Key</label>
+      <input
+        type="password"
+        id="auth-groq-key"
+        placeholder="gsk_..."
+      />
+      <p class="helper-text">
+        Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a>
+      </p>
+
+      <button id="auth-submit-btn" class="btn primary">Login</button>
     </div>
 
-    <button id="publish-btn" class="btn primary" disabled>Publish</button>
+    <!-- ═══ Main View ═══ -->
+    <div id="main-view" class="view hidden">
+      <div class="header-bar">
+        <h1><span class="logo">C</span> Chat to Webpage</h1>
+        <div class="user-info">
+          <span id="display-username" class="username-badge"></span>
+          <button id="logout-btn" class="btn-icon" title="Logout">Logout</button>
+        </div>
+      </div>
 
-    <a href="" id="view-kb-link" target="_blank">
-      <button class="btn secondary">Open Knowledge Base</button>
-    </a>
+      <!-- Scrape status -->
+      <div class="status" id="scrape-status">Detecting conversation...</div>
 
-    <!-- Result / error areas -->
-    <div id="result" class="result"></div>
-    <div id="error" class="error-box"></div>
-
-    <!-- Auth status -->
-    <div class="status" id="auth-status">Not logged in</div>
-
-    <!-- Collapsible settings -->
-    <details>
-      <summary>Settings</summary>
-
-      <label for="username">Username</label>
-      <input type="text" id="username" placeholder="Your KB username" />
-
-      <label for="password">Password</label>
-      <input type="password" id="password" placeholder="Your KB password" />
-
-      <button class="btn primary" id="login-btn">Login</button>
-
-      <label for="backend-url">Backend URL</label>
+      <!-- Publish form -->
+      <label for="title">Title</label>
       <input
         type="text"
-        id="backend-url"
-        value="https://pkb-backend.onrender.com"
+        id="title"
+        placeholder="e.g., Understanding Hybrid Search"
       />
-      <label for="frontend-url">Frontend URL</label>
-      <input
-        type="text"
-        id="frontend-url"
-        value="https://personal-assistant-olive.vercel.app"
-      />
-      <button class="btn secondary" id="save-settings">Save Settings</button>
-    </details>
+
+      <label for="tags">Tags (comma separated)</label>
+      <input type="text" id="tags" placeholder="e.g., rag, search, embeddings" />
+
+      <label for="mode">Mode</label>
+      <select id="mode">
+        <option value="new">Publish New Article</option>
+        <option value="update">Update Existing</option>
+      </select>
+
+      <div id="slug-group">
+        <label for="existing-slug">Select Article to Update</label>
+        <select id="existing-slug">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+
+      <button id="publish-btn" class="btn primary" disabled>Publish</button>
+
+      <a href="" id="view-kb-link" target="_blank">
+        <button class="btn secondary">Open Projects</button>
+      </a>
+
+      <!-- Result / error areas -->
+      <div id="result" class="result"></div>
+      <div id="error" class="error-box"></div>
+
+      <!-- Settings -->
+      <details id="settings-section">
+        <summary>Settings</summary>
+
+        <label for="settings-groq-key">Groq API Key</label>
+        <input
+          type="password"
+          id="settings-groq-key"
+          placeholder="gsk_..."
+        />
+        <p class="helper-text">
+          Free at <a href="https://console.groq.com" target="_blank">console.groq.com</a>
+        </p>
+        <button id="save-groq-key-btn" class="btn secondary">Save Key</button>
+      </details>
+    </div>
 
     <script src="popup.js"></script>
   </body>

@@ -10,8 +10,9 @@ from backend.config import (
 class LLMReasoning:
     """LLM integration for RAG responses using Groq."""
 
-    def __init__(self):
-        self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+    def __init__(self, groq_api_key: Optional[str] = None):
+        key = groq_api_key or GROQ_API_KEY
+        self.groq_client = Groq(api_key=key) if key else None
         self.groq_model = GROQ_MODEL
 
     def _format_context(self, chunks: List[Dict[str, Any]]) -> str:

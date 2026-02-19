@@ -7,17 +7,19 @@ from backend.routing.query_router import RouteType
 class RouteHandlers:
     """Handlers for different query route types."""
 
-    def __init__(self, vector_store=None, query_engine=None):
+    def __init__(self, vector_store=None, query_engine=None, groq_api_key=None):
         """
         Initialize route handlers.
 
         Args:
             vector_store: VectorStore instance for META queries
             query_engine: QueryEngine instance for KNOWLEDGE queries
+            groq_api_key: Optional user-provided Groq API key (BYOK)
         """
         self.vector_store = vector_store
         self.query_engine = query_engine
-        self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+        key = groq_api_key or GROQ_API_KEY
+        self.groq_client = Groq(api_key=key) if key else None
         self.model = GROQ_MODEL
 
     def _call_llm(self, system_prompt: str, user_message: str) -> Optional[str]:

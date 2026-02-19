@@ -1,6 +1,6 @@
 """LLM-powered conversation-to-article transformation using Groq."""
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 from groq import Groq
 from backend.config import GROQ_API_KEY, GROQ_MODEL
 
@@ -26,18 +26,34 @@ RAW CONVERSATION:
 STRUCTURED ARTICLE (Markdown):"""
 
 
-def structure_conversation(conversation: List[Dict[str, str]], title: str) -> str:
+def _resolve_groq_key(groq_api_key: Optional[str] = None) -> str:
+    """Resolve Groq API key: user-provided > server default."""
+    key = groq_api_key or GROQ_API_KEY
+    if not key:
+        raise ValueError(
+            "No Groq API key available. Provide one via the X-Groq-API-Key header "
+            "or get a free key at https://console.groq.com"
+        )
+    return key
+
+
+def structure_conversation(
+    conversation: List[Dict[str, str]],
+    title: str,
+    groq_api_key: Optional[str] = None,
+) -> str:
     """
     Send raw conversation to Groq LLM to structure into a clean article.
 
     Args:
         conversation: List of {"role": "user"|"assistant", "content": "..."}
         title: Article title
+        groq_api_key: Optional user-provided Groq API key (BYOK)
 
     Returns:
         Structured article content in Markdown.
     """
-    client = Groq(api_key=GROQ_API_KEY)
+    client = Groq(api_key=_resolve_groq_key(groq_api_key))
 
     conv_text = _format_conversation(conversation)
 

@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -404,6 +404,7 @@ async def upload_text(
 @app.post("/api/query")
 async def query(
     request: QueryRequest,
+    http_request: Request,
     current_user: dict = Depends(get_optional_user),
 ):
     """Query the knowledge base with streaming SSE response."""
@@ -413,6 +414,7 @@ async def query(
     components = get_components()
     user_id_str = str(current_user["user_id"]) if current_user else None
     user_id_int = current_user["user_id"] if current_user else None
+    groq_api_key = http_request.headers.get("x-groq-api-key")
 
     # Load chat history from conversation if conversation_id is provided
     chat_history = request.chat_history
@@ -422,6 +424,19 @@ async def query(
         chat_history = await ConversationService.get_recent_history(request.conversation_id)
         await ConversationService.add_message(request.conversation_id, "user", request.question)
 
+    # Create per-request LLM instances if user provided their own Groq key
+    if groq_api_key:
+        from backend.llm.reasoning import LLMReasoning
+        user_llm = LLMReasoning(groq_api_key=groq_api_key)
+        user_route_handlers = RouteHandlers(
+            vector_store=components["vector_store"],
+            query_engine=components["query_engine"],
+            groq_api_key=groq_api_key,
+        )
+    else:
+        user_llm = None
+        user_route_handlers = None
+
     async def event_stream():
         # Send immediately so HTTP response starts right away
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
@@ -429,14 +444,17 @@ async def query(
         accumulated_answer = []
         final_sources = []
 
+        # Select route handlers: per-request (BYOK) or default singleton
+        active_route_handlers = user_route_handlers or components.get("route_handlers")
+
         # Use query routing if enabled
-        if ENABLE_QUERY_ROUTING and components["query_router"] is not None:
+        if ENABLE_QUERY_ROUTING and components["query_router"] is not None and active_route_handlers is not None:
             route_result = await components["query_router"].classify(
                 request.question,
                 chat_history=chat_history
             )
 
-            async for event in components["route_handlers"].handle_stream(
+            async for event in active_route_handlers.handle_stream(
                 route_type=route_result.route_type,
                 query=request.question,
                 top_k=request.top_k,
@@ -460,7 +478,9 @@ async def query(
                 source_filter=request.source_filter,
                 user_id=user_id_str
             )
-            async for event in qe.llm.generate_response_stream(
+            # Use per-request LLM if available, otherwise default
+            active_llm = user_llm or qe.llm
+            async for event in active_llm.generate_response_stream(
                 query=request.question,
                 chunks=chunks
             ):

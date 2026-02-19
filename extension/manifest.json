@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Personal Knowledge Base",
-  "version": "1.0.0",
-  "description": "Turn AI conversations into your personal knowledge base",
+  "name": "Chat to Webpage",
+  "version": "1.1.0",
+  "description": "Capture AI conversations from Claude & ChatGPT and publish them as searchable knowledge base articles.",
   "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://claude.ai/*",
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://pkb-backend.onrender.com/*",
+    "https://api.groq.com/*",
     "http://localhost:8000/*"
   ],
   "action": {

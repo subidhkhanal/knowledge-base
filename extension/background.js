@@ -1,5 +1,5 @@
 /**
- * Chatbot to Webpage background service worker.
+ * Chat to Webpage background service worker.
  * Shows a green badge dot on supported chat pages (Claude, ChatGPT).
  */
 
