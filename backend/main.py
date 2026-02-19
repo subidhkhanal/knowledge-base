@@ -28,6 +28,7 @@ from backend.articles import articles_router
 from backend.projects import projects_router
 from backend.documents import documents_router
 from backend.research import research_router
+from backend.mcp_server import mcp as mcp_server
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -50,6 +51,9 @@ app.include_router(articles_router)
 app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(research_router)
+
+# Mount MCP server (Streamable HTTP transport at /mcp)
+app.mount("/mcp", mcp_server.streamable_http_app())
 
 
 @app.on_event("startup")
