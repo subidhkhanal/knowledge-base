@@ -160,7 +160,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                       No articles yet
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                      Publish conversations from the extension to this project
+                      Publish conversations or upload documents to this project
                     </p>
                   </div>
                 )}

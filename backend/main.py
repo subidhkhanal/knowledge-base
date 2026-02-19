@@ -38,7 +38,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS for frontend + Chrome extension
+# CORS for frontend
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
