@@ -131,8 +131,12 @@ h1 {
   background: rgba(220, 38, 38, 0.06);
 }
 
-#scrape-status {
-  display: block;
+#paste-section {
+  margin-bottom: 4px;
+}
+
+#paste-section label {
+  margin-top: 0;
 }
 
 /* ─── Form elements ─── */
@@ -150,6 +154,7 @@ label:first-of-type {
   margin-top: 0;
 }
 
+textarea,
 input,
 select {
   width: 100%;
@@ -164,6 +169,14 @@ select {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
+textarea {
+  resize: vertical;
+  min-height: 60px;
+  max-height: 200px;
+  line-height: 1.4;
+}
+
+textarea:focus,
 input:focus,
 select:focus {
   border-color: #0ea5e9;

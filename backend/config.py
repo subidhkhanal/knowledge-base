@@ -60,6 +60,10 @@ RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))  # Final number of results af
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
+# Tavily search API (free tier: 1000 searches/month)
+# Get your free API key at https://tavily.com
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
 # LLM generation settings
 LLM_MAX_TOKENS = 2048  # Max response tokens
 LLM_TEMPERATURE = 0.3  # Lower = more focused, higher = more creative
