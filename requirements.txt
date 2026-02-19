@@ -50,3 +50,6 @@ tavily-python
 
 # MCP Server
 mcp[cli]>=1.2.0
+
+# A2A Protocol
+a2a-sdk[http-server]>=0.3.0

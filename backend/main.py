@@ -29,6 +29,8 @@ from backend.projects import projects_router
 from backend.documents import documents_router
 from backend.research import research_router
 from backend.mcp_server import mcp as mcp_server
+from backend.a2a.agent_card import build_agent_card
+from backend.a2a.executor import PKBAgentExecutor
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -54,6 +56,23 @@ app.include_router(research_router)
 
 # Mount MCP server (Streamable HTTP transport at /mcp)
 app.mount("/mcp", mcp_server.streamable_http_app())
+
+# Mount A2A protocol (Agent Card + JSON-RPC task handling)
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+from a2a.server.apps import A2AStarletteApplication
+
+_a2a_card = build_agent_card()
+_a2a_handler = DefaultRequestHandler(
+    agent_executor=PKBAgentExecutor(),
+    task_store=InMemoryTaskStore(),
+)
+_a2a_app = A2AStarletteApplication(agent_card=_a2a_card, http_handler=_a2a_handler)
+_a2a_app.add_routes_to_app(
+    app,
+    agent_card_url="/.well-known/agent-card.json",
+    rpc_url="/a2a",
+)
 
 
 @app.on_event("startup")
