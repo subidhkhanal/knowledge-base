@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Vollkorn } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { Providers } from "./Providers";
@@ -15,9 +15,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#0ea5e9",
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "Personal Knowledge Base",
   description: "Your personal AI-powered knowledge assistant",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "PKB",
+  },
+  formatDetection: { telephone: false },
 };
 
 export default function RootLayout({

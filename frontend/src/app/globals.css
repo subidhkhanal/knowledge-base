@@ -170,6 +170,16 @@ input[type="email"]:focus {
   box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
+/* PWA standalone mode — safe area padding for notched devices */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
 /* Respect reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
