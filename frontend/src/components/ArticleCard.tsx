@@ -6,6 +6,7 @@ import type { ArticleListItem } from "@/hooks/useArticles";
 
 interface ArticleCardProps extends ArticleListItem {
   index: number;
+  projectSlug?: string;
 }
 
 function formatRelativeDate(dateStr: string): string {
@@ -22,6 +23,16 @@ function formatRelativeDate(dateStr: string): string {
   return `${Math.floor(diffDays / 365)} years ago`;
 }
 
+function getSourceStyle(source: string) {
+  if (source === "claude") {
+    return { bg: "rgba(217, 119, 6, 0.1)", color: "#f59e0b", label: "Claude" };
+  }
+  if (source === "web") {
+    return { bg: "rgba(59, 130, 246, 0.1)", color: "#3b82f6", label: "Web" };
+  }
+  return { bg: "rgba(16, 185, 129, 0.1)", color: "#10b981", label: "ChatGPT" };
+}
+
 export function ArticleCard({
   slug,
   title,
@@ -30,9 +41,15 @@ export function ArticleCard({
   conversation_length,
   created_at,
   index,
+  projectSlug,
 }: ArticleCardProps) {
+  const href = projectSlug
+    ? `/projects/${projectSlug}/articles/${slug}`
+    : `/projects/${slug}`;
+  const sourceStyle = getSourceStyle(source);
+
   return (
-    <Link href={`/projects/${slug}`}>
+    <Link href={href}>
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
@@ -59,20 +76,15 @@ export function ArticleCard({
           <span
             className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
             style={{
-              background:
-                source === "claude"
-                  ? "rgba(217, 119, 6, 0.1)"
-                  : "rgba(16, 185, 129, 0.1)",
-              color: source === "claude" ? "#f59e0b" : "#10b981",
+              background: sourceStyle.bg,
+              color: sourceStyle.color,
             }}
           >
             <span
               className="h-1.5 w-1.5 rounded-full"
-              style={{
-                background: source === "claude" ? "#f59e0b" : "#10b981",
-              }}
+              style={{ background: sourceStyle.color }}
             />
-            {source === "claude" ? "Claude" : "ChatGPT"}
+            {sourceStyle.label}
           </span>
         </div>
 
@@ -108,8 +120,12 @@ export function ArticleCard({
           style={{ color: "var(--text-tertiary)" }}
         >
           <span>{formatRelativeDate(created_at)}</span>
-          <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
-          <span>{conversation_length} messages</span>
+          {conversation_length > 0 && (
+            <>
+              <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
+              <span>{conversation_length} messages</span>
+            </>
+          )}
         </div>
       </motion.div>
     </Link>

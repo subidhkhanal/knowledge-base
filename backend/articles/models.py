@@ -17,6 +17,7 @@ class PublishRequest(BaseModel):
     source: str = Field(..., description="'claude' or 'chatgpt'")
     conversation: List[MessageInput] = Field(..., min_length=1)
     update_slug: Optional[str] = None
+    project_slug: Optional[str] = None
 
 
 class PublishResponse(BaseModel):

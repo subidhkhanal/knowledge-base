@@ -18,16 +18,26 @@ async def create_articles_table():
                 source TEXT NOT NULL,
                 content_markdown TEXT NOT NULL,
                 user_id INTEGER NOT NULL,
+                project_id INTEGER,
                 chunks_count INTEGER DEFAULT 0,
                 conversation_length INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (project_id) REFERENCES projects(id)
             );
             CREATE INDEX IF NOT EXISTS idx_articles_user ON articles(user_id);
             CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
+            CREATE INDEX IF NOT EXISTS idx_articles_project ON articles(project_id);
         """)
         await db.commit()
+
+        # Add project_id column if it doesn't exist (migration for existing DBs)
+        try:
+            await db.execute("ALTER TABLE articles ADD COLUMN project_id INTEGER REFERENCES projects(id)")
+            await db.commit()
+        except Exception:
+            pass  # Column already exists
     finally:
         await db.close()
 
@@ -41,16 +51,17 @@ async def insert_article(
     user_id: int,
     chunks_count: int,
     conversation_length: int,
+    project_id: Optional[int] = None,
 ) -> int:
     """Insert a new article. Returns the article ID."""
     db = await get_db()
     try:
         cursor = await db.execute(
             """INSERT INTO articles
-               (slug, title, tags_json, source, content_markdown, user_id, chunks_count, conversation_length)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (slug, title, tags_json, source, content_markdown, user_id, project_id, chunks_count, conversation_length)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (slug, title, json.dumps(tags), source, content_markdown,
-             user_id, chunks_count, conversation_length),
+             user_id, project_id, chunks_count, conversation_length),
         )
         await db.commit()
         return cursor.lastrowid
@@ -65,16 +76,31 @@ async def get_all_articles(user_id: Optional[int] = None) -> List[Dict[str, Any]
         if user_id:
             rows = await db.execute_fetchall(
                 """SELECT slug, title, tags_json, source, chunks_count,
-                          conversation_length, created_at, updated_at
+                          conversation_length, created_at, updated_at, project_id
                    FROM articles WHERE user_id = ? ORDER BY created_at DESC""",
                 (user_id,),
             )
         else:
             rows = await db.execute_fetchall(
                 """SELECT slug, title, tags_json, source, chunks_count,
-                          conversation_length, created_at, updated_at
+                          conversation_length, created_at, updated_at, project_id
                    FROM articles ORDER BY created_at DESC"""
             )
+        return [_row_to_list_item(r) for r in rows]
+    finally:
+        await db.close()
+
+
+async def get_articles_by_project(project_id: int) -> List[Dict[str, Any]]:
+    """Get all articles belonging to a specific project."""
+    db = await get_db()
+    try:
+        rows = await db.execute_fetchall(
+            """SELECT slug, title, tags_json, source, chunks_count,
+                      conversation_length, created_at, updated_at, project_id
+               FROM articles WHERE project_id = ? ORDER BY created_at DESC""",
+            (project_id,),
+        )
         return [_row_to_list_item(r) for r in rows]
     finally:
         await db.close()
@@ -87,14 +113,14 @@ async def get_article_by_slug(slug: str, user_id: Optional[int] = None) -> Optio
         if user_id:
             rows = await db.execute_fetchall(
                 """SELECT slug, title, tags_json, source, content_markdown,
-                          chunks_count, conversation_length, created_at, updated_at
+                          chunks_count, conversation_length, created_at, updated_at, project_id
                    FROM articles WHERE slug = ? AND user_id = ?""",
                 (slug, user_id),
             )
         else:
             rows = await db.execute_fetchall(
                 """SELECT slug, title, tags_json, source, content_markdown,
-                          chunks_count, conversation_length, created_at, updated_at
+                          chunks_count, conversation_length, created_at, updated_at, project_id
                    FROM articles WHERE slug = ?""",
                 (slug,),
             )
@@ -105,6 +131,7 @@ async def get_article_by_slug(slug: str, user_id: Optional[int] = None) -> Optio
             "slug": r[0], "title": r[1], "tags": json.loads(r[2]),
             "source": r[3], "content_markdown": r[4], "chunks_count": r[5],
             "conversation_length": r[6], "created_at": r[7], "updated_at": r[8],
+            "project_id": r[9],
         }
     finally:
         await db.close()
@@ -164,4 +191,5 @@ def _row_to_list_item(r) -> Dict[str, Any]:
         "slug": r[0], "title": r[1], "tags": json.loads(r[2]),
         "source": r[3], "chunks_count": r[4], "conversation_length": r[5],
         "created_at": r[6], "updated_at": r[7],
+        "project_id": r[8] if len(r) > 8 else None,
     }

@@ -1,12 +1,15 @@
 /**
  * Chat to Webpage extension popup logic.
- * Handles: auth (login/register), BYOK Groq key, scrape, publish.
+ * Handles: auth, BYOK Groq key, scrape (chatbot + web articles),
+ * project selection, and publish.
  */
 
 const BACKEND_URL = "http://localhost:8000";
 const FRONTEND_URL = "http://localhost:3000";
 
-let scrapedData = null;
+let scrapedData = null; // Chatbot conversation data
+let webArticleData = null; // Web article data (Readability.js)
+let pageType = null; // "chatbot" | "web" | null
 let authToken = null;
 let username = null;
 let groqApiKey = null;
@@ -38,6 +41,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const valid = await validateToken();
     if (valid) {
       showMainView();
+      await loadProjects();
       await triggerScrape();
     } else {
       authToken = null;
@@ -66,7 +70,6 @@ function showMainView() {
   document.getElementById("main-view").classList.remove("hidden");
   document.getElementById("display-username").textContent = username || "";
   document.getElementById("view-kb-link").href = `${FRONTEND_URL}/projects`;
-  // Sync Groq key to settings
   if (groqApiKey) {
     document.getElementById("settings-groq-key").value = groqApiKey;
   }
@@ -87,7 +90,7 @@ async function validateToken() {
 
 // ─── Authentication ───
 
-let authMode = "login"; // "login" or "register"
+let authMode = "login";
 
 async function handleAuth() {
   const btn = document.getElementById("auth-submit-btn");
@@ -96,7 +99,6 @@ async function handleAuth() {
   const password = document.getElementById("auth-password").value.trim();
   const groqKey = document.getElementById("auth-groq-key").value.trim();
 
-  // Validate
   if (!usernameVal || !password) {
     showStatus(statusEl, "Enter username and password", "error");
     return;
@@ -132,13 +134,17 @@ async function handleAuth() {
 
     await chrome.storage.local.set({ authToken, username, groqApiKey });
 
-    // Clear password
     document.getElementById("auth-password").value = "";
 
     showMainView();
+    await loadProjects();
     await triggerScrape();
   } catch (e) {
-    showStatus(statusEl, `${authMode === "login" ? "Login" : "Registration"} failed: ${e.message}`, "error");
+    showStatus(
+      statusEl,
+      `${authMode === "login" ? "Login" : "Registration"} failed: ${e.message}`,
+      "error"
+    );
   }
 
   btn.disabled = false;
@@ -148,7 +154,6 @@ async function handleAuth() {
 function logout() {
   authToken = null;
   username = null;
-  // Keep groqApiKey on logout
   chrome.storage.local.remove(["authToken", "username"]);
   showAuthView();
 }
@@ -207,11 +212,89 @@ async function saveGroqKey() {
   }
 }
 
+// ─── Projects ───
+
+async function loadProjects() {
+  const select = document.getElementById("project-select");
+  select.innerHTML = '<option value="">Loading projects...</option>';
+
+  try {
+    const resp = await fetch(`${BACKEND_URL}/api/projects`, {
+      headers: getHeaders(),
+    });
+    const data = await resp.json();
+
+    if (data.projects && data.projects.length > 0) {
+      select.innerHTML =
+        '<option value="">(No project)</option>' +
+        data.projects
+          .map(
+            (p) => `<option value="${p.slug}">${p.title}</option>`
+          )
+          .join("");
+    } else {
+      select.innerHTML = '<option value="">(No projects — create one)</option>';
+    }
+  } catch {
+    select.innerHTML = '<option value="">Failed to load projects</option>';
+  }
+}
+
+async function createNewProject() {
+  const titleInput = document.getElementById("new-project-title");
+  const title = titleInput.value.trim();
+  if (!title) return;
+
+  const btn = document.getElementById("create-project-btn");
+  btn.disabled = true;
+  btn.textContent = "Creating...";
+
+  try {
+    const resp = await fetch(`${BACKEND_URL}/api/projects`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ title, description: "" }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to create project");
+    }
+
+    const project = await resp.json();
+
+    // Reload projects and select the new one
+    await loadProjects();
+    document.getElementById("project-select").value = project.slug;
+
+    // Hide the form
+    titleInput.value = "";
+    document.getElementById("new-project-form").classList.add("hidden");
+  } catch (e) {
+    alert(e.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Create";
+}
+
 // ─── Scraping ───
+
+function isChatbotPage(url) {
+  return (
+    url.includes("claude.ai") ||
+    url.includes("chatgpt.com") ||
+    url.includes("chat.openai.com")
+  );
+}
 
 async function triggerScrape() {
   const statusEl = document.getElementById("scrape-status");
   const publishBtn = document.getElementById("publish-btn");
+
+  scrapedData = null;
+  webArticleData = null;
+  pageType = null;
 
   try {
     const [tab] = await chrome.tabs.query({
@@ -219,37 +302,84 @@ async function triggerScrape() {
       currentWindow: true,
     });
 
-    if (!tab?.id) {
+    if (!tab?.id || !tab.url) {
       showStatus(statusEl, "No active tab found", "error");
       return;
     }
 
-    chrome.tabs.sendMessage(
-      tab.id,
-      { action: "scrapeConversation" },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          showStatus(
-            statusEl,
-            "Not on a supported chat page (Claude or ChatGPT)",
-            "error"
-          );
-          return;
-        }
+    if (isChatbotPage(tab.url)) {
+      // Chatbot page — use existing conversation scrapers
+      pageType = "chatbot";
+      chrome.tabs.sendMessage(
+        tab.id,
+        { action: "scrapeConversation" },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            showStatus(statusEl, "Could not scrape conversation", "error");
+            return;
+          }
 
-        if (response?.success && response.messages.length > 0) {
-          scrapedData = response;
-          showStatus(
-            statusEl,
-            `${response.messages.length} messages detected (${response.source})`,
-            "success"
-          );
-          publishBtn.disabled = false;
-        } else {
-          showStatus(statusEl, "No conversation found on this page", "error");
+          if (response?.success && response.messages?.length > 0) {
+            scrapedData = response;
+            showStatus(
+              statusEl,
+              `${response.messages.length} messages detected (${response.source})`,
+              "success"
+            );
+            publishBtn.disabled = false;
+          } else {
+            showStatus(
+              statusEl,
+              "No conversation found on this page",
+              "error"
+            );
+          }
         }
-      }
-    );
+      );
+    } else if (
+      tab.url.startsWith("https://") ||
+      tab.url.startsWith("http://")
+    ) {
+      // Regular web page — use Readability.js article scraper
+      pageType = "web";
+      chrome.tabs.sendMessage(
+        tab.id,
+        { action: "scrapeArticle" },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            showStatus(
+              statusEl,
+              "Could not extract article from this page",
+              "error"
+            );
+            return;
+          }
+
+          if (response?.success) {
+            webArticleData = response;
+            // Pre-fill title from article
+            const titleInput = document.getElementById("title");
+            if (!titleInput.value) {
+              titleInput.value = response.title || "";
+            }
+            showStatus(
+              statusEl,
+              `Article detected: "${(response.title || "").substring(0, 50)}${(response.title || "").length > 50 ? "..." : ""}"`,
+              "success"
+            );
+            publishBtn.disabled = false;
+          } else {
+            showStatus(
+              statusEl,
+              response?.error || "Could not extract article",
+              "error"
+            );
+          }
+        }
+      );
+    } else {
+      showStatus(statusEl, "Not on a web page", "error");
+    }
   } catch {
     showStatus(statusEl, "Could not access page content", "error");
   }
@@ -293,33 +423,54 @@ async function publishArticle() {
     return;
   }
 
-  if (!scrapedData) {
-    showError(errorEl, "No conversation data available");
-    resetPublishBtn(btn);
-    return;
-  }
-
-  const payload = {
-    title,
-    tags: document
-      .getElementById("tags")
-      .value.split(",")
-      .map((t) => t.trim())
-      .filter(Boolean),
-    source: scrapedData.source,
-    conversation: scrapedData.messages,
-  };
-
-  const mode = document.getElementById("mode").value;
-  if (mode === "update") {
-    payload.update_slug = document.getElementById("existing-slug").value;
-  }
+  const projectSlug =
+    document.getElementById("project-select").value || null;
+  const tags = document
+    .getElementById("tags")
+    .value.split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
   try {
-    const resp = await fetch(`${BACKEND_URL}/api/publish`, {
+    let endpoint;
+    let payload;
+
+    if (pageType === "chatbot" && scrapedData) {
+      // Chatbot conversation publish
+      endpoint = "/api/publish";
+      payload = {
+        title,
+        tags,
+        source: scrapedData.source,
+        conversation: scrapedData.messages,
+        project_slug: projectSlug,
+      };
+
+      const mode = document.getElementById("mode").value;
+      if (mode === "update") {
+        payload.update_slug =
+          document.getElementById("existing-slug").value;
+      }
+    } else if (pageType === "web" && webArticleData) {
+      // Web article publish
+      endpoint = "/api/publish/web-article";
+      payload = {
+        title,
+        content: webArticleData.content,
+        url: webArticleData.url,
+        tags,
+        project_slug: projectSlug,
+      };
+    } else {
+      showError(errorEl, "No content available to publish");
+      resetPublishBtn(btn);
+      return;
+    }
+
+    const resp = await fetch(`${BACKEND_URL}${endpoint}`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(payload),
@@ -333,7 +484,14 @@ async function publishArticle() {
     }
 
     const result = await resp.json();
-    const articleUrl = `${FRONTEND_URL}/projects/${result.slug}`;
+
+    // Build link to the article
+    let articleUrl;
+    if (projectSlug) {
+      articleUrl = `${FRONTEND_URL}/projects/${projectSlug}/articles/${result.slug}`;
+    } else {
+      articleUrl = `${FRONTEND_URL}/projects/${result.slug}`;
+    }
 
     resultEl.innerHTML =
       `Published! ${result.chunks_created} chunks indexed.<br>` +
@@ -409,7 +567,6 @@ function bindEvents() {
       authMode = tab.dataset.tab;
       document.getElementById("auth-submit-btn").textContent =
         authMode === "login" ? "Login" : "Register";
-      // Clear status on tab switch
       document.getElementById("auth-status").style.display = "none";
     });
   });
@@ -428,6 +585,37 @@ function bindEvents() {
 
   // Logout
   document.getElementById("logout-btn").addEventListener("click", logout);
+
+  // Project selector: new project button
+  document
+    .getElementById("new-project-btn")
+    .addEventListener("click", () => {
+      const form = document.getElementById("new-project-form");
+      form.classList.toggle("hidden");
+      if (!form.classList.contains("hidden")) {
+        document.getElementById("new-project-title").focus();
+      }
+    });
+
+  // Create project
+  document
+    .getElementById("create-project-btn")
+    .addEventListener("click", createNewProject);
+
+  // Cancel new project
+  document
+    .getElementById("cancel-project-btn")
+    .addEventListener("click", () => {
+      document.getElementById("new-project-form").classList.add("hidden");
+      document.getElementById("new-project-title").value = "";
+    });
+
+  // Enter on new project title
+  document
+    .getElementById("new-project-title")
+    .addEventListener("keydown", (e) => {
+      if (e.key === "Enter") createNewProject();
+    });
 
   // Mode toggle
   document.getElementById("mode").addEventListener("change", async (e) => {

@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <!-- ═══ Auth View ═══ -->
+    <!-- Auth View -->
     <div id="auth-view" class="view">
       <h1><span class="logo">C</span> Chat to Webpage</h1>
 
@@ -51,7 +51,7 @@
       <button id="auth-submit-btn" class="btn primary">Login</button>
     </div>
 
-    <!-- ═══ Main View ═══ -->
+    <!-- Main View -->
     <div id="main-view" class="view hidden">
       <div class="header-bar">
         <h1><span class="logo">C</span> Chat to Webpage</h1>
@@ -62,7 +62,29 @@
       </div>
 
       <!-- Scrape status -->
-      <div class="status" id="scrape-status">Detecting conversation...</div>
+      <div class="status" id="scrape-status">Detecting content...</div>
+
+      <!-- Project selector -->
+      <label for="project-select">Project</label>
+      <div class="project-selector">
+        <select id="project-select">
+          <option value="">Loading projects...</option>
+        </select>
+        <button id="new-project-btn" class="btn-icon-sm" title="Create new project">+</button>
+      </div>
+
+      <!-- New project inline form (hidden by default) -->
+      <div id="new-project-form" class="inline-form hidden">
+        <input
+          type="text"
+          id="new-project-title"
+          placeholder="New project title"
+        />
+        <div class="inline-actions">
+          <button id="create-project-btn" class="btn small primary">Create</button>
+          <button id="cancel-project-btn" class="btn small secondary">Cancel</button>
+        </div>
+      </div>
 
       <!-- Publish form -->
       <label for="title">Title</label>

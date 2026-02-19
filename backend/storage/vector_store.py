@@ -125,6 +125,9 @@ class VectorStore:
             if doc.get("token_count"):
                 metadata["token_count"] = int(doc["token_count"])
 
+            if doc.get("project_id") is not None:
+                metadata["project_id"] = int(doc["project_id"])
+
             metadatas.append(metadata)
 
         # Get embeddings for all texts

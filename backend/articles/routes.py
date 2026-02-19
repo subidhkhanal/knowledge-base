@@ -26,6 +26,16 @@ async def publish_conversation(
     components = _get_components()
     groq_api_key = http_request.headers.get("x-groq-api-key")
 
+    # Resolve project_slug to project_id
+    project_id = None
+    if request.project_slug:
+        from backend.projects import database as projects_db
+        project_id = await projects_db.get_project_id_by_slug(
+            request.project_slug, current_user["user_id"]
+        )
+        if project_id is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+
     try:
         result = publish_article(
             title=request.title,
@@ -38,6 +48,7 @@ async def publish_conversation(
             bm25_index=components.get("bm25_index"),
             update_slug=request.update_slug,
             groq_api_key=groq_api_key,
+            project_id=project_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -64,6 +75,7 @@ async def publish_conversation(
             user_id=current_user["user_id"],
             chunks_count=result["chunks_count"],
             conversation_length=result["conversation_length"],
+            project_id=project_id,
         )
 
     return PublishResponse(
@@ -183,3 +195,66 @@ async def delete_article_endpoint(
         raise HTTPException(status_code=404, detail="Article not found")
 
     return {"success": True, "message": f"Article '{slug}' deleted"}
+
+
+@router.post("/publish/web-article", response_model=PublishResponse)
+async def publish_web_article(
+    http_request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Publish a web article extracted via Readability.js."""
+    from backend.projects.models import WebArticlePublishRequest
+    from backend.articles.publisher import publish_web_article
+
+    body = await http_request.json()
+    request = WebArticlePublishRequest(**body)
+
+    components = _get_components()
+    groq_api_key = http_request.headers.get("x-groq-api-key")
+
+    # Resolve project_slug to project_id
+    project_id = None
+    if request.project_slug:
+        from backend.projects import database as projects_db
+        project_id = await projects_db.get_project_id_by_slug(
+            request.project_slug, current_user["user_id"]
+        )
+        if project_id is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = publish_web_article(
+            title=request.title,
+            content=request.content,
+            url=request.url,
+            tags=request.tags,
+            user_id=current_user["user_id"],
+            chunker=components["chunker"],
+            vector_store=components["vector_store"],
+            bm25_index=components.get("bm25_index"),
+            groq_api_key=groq_api_key,
+            project_id=project_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Publishing failed: {str(e)}")
+
+    # Save to SQLite
+    await db.insert_article(
+        slug=result["slug"],
+        title=request.title,
+        tags=request.tags,
+        source="web",
+        content_markdown=result["structured_content"],
+        user_id=current_user["user_id"],
+        chunks_count=result["chunks_count"],
+        conversation_length=0,
+        project_id=project_id,
+    )
+
+    return PublishResponse(
+        success=True,
+        slug=result["slug"],
+        chunks_created=result["chunks_count"],
+    )

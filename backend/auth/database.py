@@ -40,6 +40,10 @@ async def init_db():
     await db.commit()
     await db.close()
 
+    # Create projects table (must be before articles due to FK)
+    from backend.projects.database import create_projects_table
+    await create_projects_table()
+
     # Create articles table (separate module manages it)
     from backend.articles.database import create_articles_table
     await create_articles_table()

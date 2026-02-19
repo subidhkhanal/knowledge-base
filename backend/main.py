@@ -25,6 +25,7 @@ from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_
 from backend.auth.database import init_db, get_db
 from backend.conversations import ConversationService
 from backend.articles import articles_router
+from backend.projects import projects_router
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -44,6 +45,7 @@ app.add_middleware(
 
 # Mount article publishing routes
 app.include_router(articles_router)
+app.include_router(projects_router)
 
 
 @app.on_event("startup")
