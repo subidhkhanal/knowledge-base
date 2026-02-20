@@ -10,6 +10,7 @@ const INITIAL_GRACE_MS = 3000;
 const RETRY_INTERVAL_MS = 3000;
 const REQUEST_TIMEOUT_MS = 5000;
 const MAX_TIMEOUT_MS = 60000;
+const OFFLINE_RETRY_INTERVAL_MS = 10000;
 
 export function useBackendStatus() {
   const [status, setStatus] = useState<BackendStatus>("checking");
@@ -18,6 +19,7 @@ export function useBackendStatus() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  const offlineTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const pingHealth = useCallback(async (): Promise<boolean> => {
     try {
@@ -32,6 +34,23 @@ export function useBackendStatus() {
       return false;
     }
   }, []);
+
+  const startOfflinePolling = useCallback(() => {
+    if (offlineTimerRef.current) clearInterval(offlineTimerRef.current);
+
+    offlineTimerRef.current = setInterval(async () => {
+      if (!isMountedRef.current) return;
+
+      const isUp = await pingHealth();
+      if (!isMountedRef.current) return;
+
+      if (isUp) {
+        setStatus("online");
+        if (offlineTimerRef.current) clearInterval(offlineTimerRef.current);
+        offlineTimerRef.current = null;
+      }
+    }, OFFLINE_RETRY_INTERVAL_MS);
+  }, [pingHealth]);
 
   const startPolling = useCallback(() => {
     startTimeRef.current = Date.now();
@@ -51,7 +70,10 @@ export function useBackendStatus() {
       if (elapsed > MAX_TIMEOUT_MS) {
         setStatus("offline");
         if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = null;
         if (elapsedRef.current) clearInterval(elapsedRef.current);
+        elapsedRef.current = null;
+        startOfflinePolling();
         return;
       }
 
@@ -61,7 +83,9 @@ export function useBackendStatus() {
       if (isUp) {
         setStatus("online");
         if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = null;
         if (elapsedRef.current) clearInterval(elapsedRef.current);
+        elapsedRef.current = null;
         return;
       }
 
@@ -72,11 +96,13 @@ export function useBackendStatus() {
 
     poll();
     timerRef.current = setInterval(poll, RETRY_INTERVAL_MS);
-  }, [pingHealth]);
+  }, [pingHealth, startOfflinePolling]);
 
   const retry = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (elapsedRef.current) clearInterval(elapsedRef.current);
+    if (offlineTimerRef.current) clearInterval(offlineTimerRef.current);
+    offlineTimerRef.current = null;
     startPolling();
   }, [startPolling]);
 
@@ -88,6 +114,7 @@ export function useBackendStatus() {
       isMountedRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       if (elapsedRef.current) clearInterval(elapsedRef.current);
+      if (offlineTimerRef.current) clearInterval(offlineTimerRef.current);
     };
   }, [startPolling]);
 
