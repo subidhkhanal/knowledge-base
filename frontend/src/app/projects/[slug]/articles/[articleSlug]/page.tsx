@@ -34,34 +34,8 @@ function ArticleReaderContent({
   articleSlug: string;
 }) {
   const { article, isLoading, error, refetch } = useArticle(articleSlug);
-  const { apiFetch, createXhr } = useApi();
+  const { apiFetch } = useApi();
   const [isReprocessing, setIsReprocessing] = useState(false);
-
-  const handleFileUpload = (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const xhr = createXhr("POST", "/api/upload/document");
-
-    xhr.addEventListener("load", () => {
-      try {
-        const data = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          alert("Upload complete: document added to knowledge base");
-        } else {
-          alert(data.detail || "Upload failed");
-        }
-      } catch {
-        alert("Upload failed: invalid response");
-      }
-    });
-
-    xhr.addEventListener("error", () => {
-      alert("Upload failed: could not connect to server");
-    });
-
-    xhr.send(formData);
-  };
 
   const handleReprocess = async () => {
     if (!article || isReprocessing) return;
@@ -88,7 +62,7 @@ function ArticleReaderContent({
       className="h-screen overflow-y-auto"
       style={{ background: "var(--bg-primary)" }}
     >
-      <Header onUploadClick={handleFileUpload} />
+      <Header />
 
       <main className="mx-auto max-w-2xl px-6 py-12">
         {/* Back link */}
