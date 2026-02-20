@@ -23,6 +23,7 @@ Usage:
 """
 
 import asyncio
+import contextvars
 import json
 import logging
 import os
@@ -30,35 +31,24 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from backend.config import MCP_AUTH_ENABLED
-
 logger = logging.getLogger(__name__)
 
-# User ID for data isolation (stdio mode uses env var, HTTP can override)
+# User ID for data isolation (stdio mode uses env var, HTTP uses middleware contextvar)
 MCP_USER_ID = os.getenv("MCP_USER_ID", "1")
 
-# Build auth kwargs conditionally
-_mcp_kwargs: dict = dict(
-    name="Personal Knowledge Base",
+# Contextvar set by the ASGI middleware in main.py after validating ?token= param
+mcp_user_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "mcp_user_id", default=None
+)
+
+mcp = FastMCP(
+    "Personal Knowledge Base",
     instructions=(
         "This server provides access to a personal knowledge base. "
         "You can search stored articles, ask questions answered by RAG, "
         "list and retrieve articles, and launch deep research on any topic."
     ),
 )
-
-if MCP_AUTH_ENABLED:
-    from mcp.server.auth.settings import AuthSettings
-    from backend.auth.mcp_token_verifier import MCPTokenVerifier
-
-    _base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
-    _mcp_kwargs["token_verifier"] = MCPTokenVerifier()
-    _mcp_kwargs["auth"] = AuthSettings(
-        issuer_url=_base_url,
-        resource_server_url=f"{_base_url}/mcp",
-    )
-
-mcp = FastMCP(**_mcp_kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -72,19 +62,12 @@ def _get_components():
 
 
 def _resolve_user_id(user_id: Optional[str] = None) -> str:
-    """Resolve user_id: explicit param → auth context (HTTP) → env var (stdio)."""
+    """Resolve user_id: explicit param → middleware contextvar (HTTP) → env var (stdio)."""
     if user_id:
         return user_id
-
-    # Try auth context set by FastMCP's token verification middleware
-    try:
-        from mcp.server.auth.middleware.auth_context import get_access_token
-        access_token = get_access_token()
-        if access_token:
-            return access_token.client_id
-    except Exception:
-        pass
-
+    ctx = mcp_user_id_var.get()
+    if ctx:
+        return ctx
     return MCP_USER_ID
 
 

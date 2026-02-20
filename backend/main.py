@@ -55,13 +55,14 @@ app.include_router(documents_router)
 app.include_router(research_router)
 
 # Mount MCP server (Streamable HTTP transport at /mcp)
-# Wrap with middleware that converts ?token= query param to Authorization header
-# so Claude.ai and other platforms that don't support custom headers can authenticate.
+# Wrap with middleware that validates ?token= query param and sets user context.
+# This avoids FastMCP's built-in OAuth (which Claude.ai can't use without a full
+# OAuth authorization server) while still providing per-user data isolation.
 _mcp_app = mcp_server.streamable_http_app()
 
 
 class _MCPQueryTokenMiddleware:
-    """ASGI middleware: converts ?token=xxx query param to Authorization: Bearer header."""
+    """ASGI middleware: validates ?token=xxx, looks up user, sets contextvar."""
 
     def __init__(self, app):
         self.app = app
@@ -69,15 +70,50 @@ class _MCPQueryTokenMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
             qs = scope.get("query_string", b"").decode()
-            has_auth = any(k == b"authorization" for k, _ in scope.get("headers", []))
-            if not has_auth and "token=" in qs:
+            if "token=" in qs:
                 from urllib.parse import parse_qs
                 params = parse_qs(qs)
                 token = params.get("token", [None])[0]
                 if token:
-                    headers = list(scope.get("headers", []))
-                    headers.append((b"authorization", f"Bearer {token}".encode()))
-                    scope = {**scope, "headers": headers}
+                    # Look up token in DB
+                    import aiosqlite
+                    from backend.config import SQLITE_DB_PATH
+                    db = await aiosqlite.connect(SQLITE_DB_PATH)
+                    db.row_factory = aiosqlite.Row
+                    try:
+                        cursor = await db.execute(
+                            "SELECT id FROM users WHERE mcp_token = ?", (token,)
+                        )
+                        row = await cursor.fetchone()
+                    finally:
+                        await db.close()
+
+                    if row:
+                        from backend.mcp_server import mcp_user_id_var
+                        ctx_token = mcp_user_id_var.set(str(row["id"]))
+                        try:
+                            await self.app(scope, receive, send)
+                        finally:
+                            mcp_user_id_var.reset(ctx_token)
+                        return
+                    else:
+                        # Invalid token — return 401
+                        response_body = b'{"error": "Invalid MCP token"}'
+                        await send({
+                            "type": "http.response.start",
+                            "status": 401,
+                            "headers": [
+                                (b"content-type", b"application/json"),
+                                (b"content-length", str(len(response_body)).encode()),
+                            ],
+                        })
+                        await send({
+                            "type": "http.response.body",
+                            "body": response_body,
+                        })
+                        return
+
+        # No token param — fall through (uses MCP_USER_ID env var)
         await self.app(scope, receive, send)
 
 
