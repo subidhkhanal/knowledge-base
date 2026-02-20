@@ -38,6 +38,16 @@ async def init_db():
         CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id);
     """)
     await db.commit()
+
+    # Migration: add mcp_token column for existing databases
+    try:
+        await db.execute("ALTER TABLE users ADD COLUMN mcp_token TEXT")
+        await db.commit()
+    except Exception:
+        pass  # Column already exists
+
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_users_mcp_token ON users(mcp_token)")
+    await db.commit()
     await db.close()
 
     # Create projects table (must be before articles due to FK)

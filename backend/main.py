@@ -55,7 +55,33 @@ app.include_router(documents_router)
 app.include_router(research_router)
 
 # Mount MCP server (Streamable HTTP transport at /mcp)
-app.mount("/mcp", mcp_server.streamable_http_app())
+# Wrap with middleware that converts ?token= query param to Authorization header
+# so Claude.ai and other platforms that don't support custom headers can authenticate.
+_mcp_app = mcp_server.streamable_http_app()
+
+
+class _MCPQueryTokenMiddleware:
+    """ASGI middleware: converts ?token=xxx query param to Authorization: Bearer header."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            qs = scope.get("query_string", b"").decode()
+            has_auth = any(k == b"authorization" for k, _ in scope.get("headers", []))
+            if not has_auth and "token=" in qs:
+                from urllib.parse import parse_qs
+                params = parse_qs(qs)
+                token = params.get("token", [None])[0]
+                if token:
+                    headers = list(scope.get("headers", []))
+                    headers.append((b"authorization", f"Bearer {token}".encode()))
+                    scope = {**scope, "headers": headers}
+        await self.app(scope, receive, send)
+
+
+app.mount("/mcp", _MCPQueryTokenMiddleware(_mcp_app))
 
 # Mount A2A protocol (Agent Card + JSON-RPC task handling)
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -107,6 +133,56 @@ async def login(user: UserLogin):
             raise HTTPException(status_code=401, detail="Invalid username or password")
         token = AuthService.create_token(db_user["id"], db_user["username"])
         return {"access_token": token, "token_type": "bearer", "user_id": db_user["id"], "username": db_user["username"]}
+    finally:
+        await db.close()
+
+
+# --- MCP token endpoints (require JWT auth) ---
+
+@app.post("/api/auth/mcp-token")
+async def generate_mcp_token(current_user: dict = Depends(get_current_user)):
+    """Generate or regenerate an MCP access token for the current user."""
+    import secrets
+    token = secrets.token_hex(32)
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE users SET mcp_token = ? WHERE id = ?",
+            (token, current_user["user_id"]),
+        )
+        await db.commit()
+        return {"mcp_token": token}
+    finally:
+        await db.close()
+
+
+@app.delete("/api/auth/mcp-token")
+async def revoke_mcp_token(current_user: dict = Depends(get_current_user)):
+    """Revoke the MCP access token."""
+    db = await get_db()
+    try:
+        await db.execute(
+            "UPDATE users SET mcp_token = NULL WHERE id = ?",
+            (current_user["user_id"],),
+        )
+        await db.commit()
+        return {"message": "MCP token revoked"}
+    finally:
+        await db.close()
+
+
+@app.get("/api/auth/mcp-token/status")
+async def get_mcp_token_status(current_user: dict = Depends(get_current_user)):
+    """Check if user has an MCP token (without revealing it)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT mcp_token FROM users WHERE id = ?",
+            (current_user["user_id"],),
+        )
+        row = await cursor.fetchone()
+        has_token = row is not None and row["mcp_token"] is not None
+        return {"has_token": has_token}
     finally:
         await db.close()
 
