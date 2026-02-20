@@ -9,13 +9,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, setGroqKey, isLoggedIn } = useAuth();
+  const { login, isLoggedIn } = useAuth();
   const { status: backendStatus, retry } = useBackendStatus();
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [groqKey, setGroqKeyInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -47,17 +46,22 @@ export default function LoginPage() {
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        const detail = typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail) || `HTTP ${resp.status}`;
+        let detail: string;
+        if (typeof err.detail === "string") {
+          detail = err.detail;
+        } else if (Array.isArray(err.detail)) {
+          detail = err.detail.map((e: { msg?: string }) => {
+            const msg = e.msg || "Validation error";
+            return msg.replace(/^Value error, /i, "");
+          }).join(". ");
+        } else {
+          detail = `HTTP ${resp.status}`;
+        }
         throw new Error(detail);
       }
 
       const data = await resp.json();
       login(data.access_token, data.username || username.trim());
-
-      if (groqKey.trim()) {
-        setGroqKey(groqKey.trim());
-      }
-
       router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -210,35 +214,6 @@ export default function LoginPage() {
                     color: "var(--text-primary)",
                   }}
                 />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                  Groq API Key <span style={{ color: "var(--text-tertiary)" }}>(optional)</span>
-                </label>
-                <input
-                  type="password"
-                  value={groqKey}
-                  onChange={(e) => setGroqKeyInput(e.target.value)}
-                  placeholder="gsk_..."
-                  className="w-full rounded-lg px-3 py-2 text-sm"
-                  style={{
-                    background: "var(--bg-primary)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  }}
-                />
-                <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  Free at{" "}
-                  <a
-                    href="https://console.groq.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    console.groq.com
-                  </a>
-                </p>
               </div>
 
               <button
