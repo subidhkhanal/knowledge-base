@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vollkorn:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <!-- Auth View — prompts user to login on the website -->
+    <div id="auth-view" class="view">
+      <h1><span class="logo">C</span> Chat to Webpage</h1>
+
+      <div class="login-prompt">
+        <p class="login-prompt-text">Login on the website to use this extension.</p>
+        <button id="open-login-btn" class="btn primary">Open Login Page</button>
+      </div>
+
+      <div id="auth-status" class="status"></div>
+    </div>
+
+    <!-- Main View -->
+    <div id="main-view" class="view hidden">
+      <div class="header-bar">
+        <h1><span class="logo">C</span> Chat to Webpage</h1>
+        <div class="user-info">
+          <span id="display-username" class="username-badge"></span>
+          <button id="logout-btn" class="btn-icon" title="Logout">Logout</button>
+        </div>
+      </div>
+
+      <!-- Paste conversation or auto-detected web article -->
+      <div id="paste-section">
+        <label for="conversation-paste">Paste conversation (Ctrl+A, Ctrl+C from chat)</label>
+        <textarea id="conversation-paste" rows="4" placeholder="Paste your conversation here..."></textarea>
+        <div id="paste-status" class="status"></div>
+      </div>
+      <div id="web-article-status" class="status"></div>
+
+      <!-- Project selector -->
+      <label for="project-select">Project</label>
+      <div class="project-selector">
+        <select id="project-select">
+          <option value="">Loading projects...</option>
+        </select>
+        <button id="new-project-btn" class="btn-icon-sm" title="Create new project">+</button>
+      </div>
+
+      <!-- New project inline form (hidden by default) -->
+      <div id="new-project-form" class="inline-form hidden">
+        <input
+          type="text"
+          id="new-project-title"
+          placeholder="New project title"
+        />
+        <div class="inline-actions">
+          <button id="create-project-btn" class="btn small primary">Create</button>
+          <button id="cancel-project-btn" class="btn small secondary">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Publish form -->
+      <label for="title">Title</label>
+      <input
+        type="text"
+        id="title"
+        placeholder="e.g., Understanding Hybrid Search"
+      />
+
+      <label for="tags">Tags (comma separated)</label>
+      <input type="text" id="tags" placeholder="e.g., rag, search, embeddings" />
+
+      <label for="mode">Mode</label>
+      <select id="mode">
+        <option value="new">Save New Article</option>
+        <option value="update">Update Existing</option>
+      </select>
+
+      <div id="slug-group">
+        <label for="existing-slug">Select Article to Update</label>
+        <select id="existing-slug">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+
+      <button id="publish-btn" class="btn primary" disabled>Save Article</button>
+
+      <a href="" id="view-kb-link" target="_blank">
+        <button class="btn secondary">Open Projects</button>
+      </a>
+
+      <!-- Result / error areas -->
+      <div id="result" class="result"></div>
+      <div id="error" class="error-box"></div>
+
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
