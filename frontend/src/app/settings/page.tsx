@@ -91,8 +91,8 @@ function TavilyUsageDisplay({ apiKey }: { apiKey: string }) {
 
   if (!usage) return null;
 
-  const hasLimit = usage.limit !== null && usage.limit > 0;
-  const usagePercent = hasLimit ? Math.round((usage.total_usage / usage.limit!) * 100) : 0;
+  const effectiveLimit = (usage.limit !== null && usage.limit > 0) ? usage.limit : 1000;
+  const usagePercent = Math.round((usage.total_usage / effectiveLimit) * 100);
 
   return (
     <div className="mt-3 rounded-lg p-3" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
@@ -106,23 +106,21 @@ function TavilyUsageDisplay({ apiKey }: { apiKey: string }) {
       </div>
 
       {/* Progress bar */}
-      {hasLimit && (
-        <div className="h-1.5 rounded-full mb-2" style={{ background: "var(--bg-tertiary)" }}>
-          <div
-            className="h-full rounded-full transition-all"
-            style={{
-              width: `${Math.min(usagePercent, 100)}%`,
-              background: usagePercent > 80 ? "var(--error)" : "var(--accent)",
-            }}
-          />
-        </div>
-      )}
+      <div className="h-1.5 rounded-full mb-2" style={{ background: "var(--bg-tertiary)" }}>
+        <div
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${Math.min(usagePercent, 100)}%`,
+            background: usagePercent > 80 ? "var(--error)" : "var(--accent)",
+          }}
+        />
+      </div>
 
       <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-tertiary)" }}>
         <span>
-          {usage.total_usage.toLocaleString()} / {hasLimit ? usage.limit!.toLocaleString() : "\u221E"} credits
+          {usage.total_usage.toLocaleString()} / {effectiveLimit.toLocaleString()} credits
         </span>
-        {hasLimit && <span>{usagePercent}%</span>}
+        <span>{usagePercent}%</span>
       </div>
 
       <div className="mt-2 flex gap-4 text-xs" style={{ color: "var(--text-tertiary)" }}>
