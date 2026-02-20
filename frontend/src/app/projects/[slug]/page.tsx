@@ -31,6 +31,8 @@ const sourceConfig: Record<string, { label: string; color: string; bg: string }>
   web: { label: "Web", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
   paste: { label: "Pasted", color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
   research: { label: "Research", color: "#6366f1", bg: "rgba(99, 102, 241, 0.1)" },
+  pdf: { label: "PDF", color: "#ef4444", bg: "rgba(239, 68, 68, 0.1)" },
+  document: { label: "Document", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
 };
 
 function getSourceInfo(source: string) {
@@ -183,16 +185,9 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                 </p>
               </div>
 
-              {/* Articles Section */}
-              <section className="mb-12">
-                <h2
-                  className="mb-4 text-sm font-semibold uppercase tracking-wider"
-                  style={{ color: "var(--text-tertiary)" }}
-                >
-                  Articles
-                </h2>
-
-                {project.articles.length === 0 && (
+              {/* Content Section — unified articles + documents */}
+              <section>
+                {project.articles.length === 0 && project.documents.length === 0 && (
                   <div
                     className="flex flex-col items-center justify-center rounded-xl py-12 text-center"
                     style={{
@@ -213,7 +208,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                       </svg>
                     </div>
                     <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      No articles yet
+                      No content yet
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
                       Publish conversations or upload documents to this project
@@ -221,216 +216,133 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                   </div>
                 )}
 
-                {project.articles.length > 0 && (
+                {(project.articles.length > 0 || project.documents.length > 0) && (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {project.articles.map((article, index) => (
-                      <motion.div
-                        key={article.slug}
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: 0.6,
-                          ease: [0.16, 1, 0.3, 1],
-                          delay: index * 0.05,
-                        }}
-                        className="group relative flex flex-col gap-3 rounded-xl p-4 cursor-pointer"
-                        style={{
-                          background: "var(--bg-secondary)",
-                          border: "1px solid var(--border)",
-                          boxShadow: "var(--shadow-card)",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = "var(--border-hover)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = "var(--border)";
-                        }}
-                        onClick={() => router.push(`/projects/${slug}/articles/${article.slug}`)}
-                      >
-                        {/* Delete button */}
-                        <button
-                          className="absolute top-3 right-3 rounded-lg p-1.5 opacity-0 transition-opacity cursor-pointer group-hover:opacity-100"
-                          style={{ color: "var(--text-tertiary)" }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.background = "var(--error-bg)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingArticle({ slug: article.slug, title: article.title });
+                    {/* Articles */}
+                    {project.articles.map((article, index) => {
+                      const src = getSourceInfo(article.source);
+                      return (
+                        <motion.div
+                          key={`article-${article.slug}`}
+                          initial={{ opacity: 0, y: 24 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            duration: 0.6,
+                            ease: [0.16, 1, 0.3, 1],
+                            delay: index * 0.05,
                           }}
+                          className="group relative flex flex-col gap-3 rounded-xl p-4 cursor-pointer"
+                          style={{
+                            background: "var(--bg-secondary)",
+                            border: "1px solid var(--border)",
+                            boxShadow: "var(--shadow-card)",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                          onClick={() => router.push(`/projects/${slug}/articles/${article.slug}`)}
                         >
-                          <TrashIcon />
-                        </button>
-
-                        {/* Source badge */}
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const src = getSourceInfo(article.source);
-                            return (
-                              <span
-                                className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                                style={{ background: src.bg, color: src.color }}
-                              >
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full"
-                                  style={{ background: src.color }}
-                                />
-                                {src.label}
-                              </span>
-                            );
-                          })()}
-                        </div>
-
-                        {/* Title */}
-                        <h3
-                          className="text-sm font-medium leading-snug line-clamp-2"
-                          style={{ color: "var(--text-primary)" }}
-                        >
-                          {article.title}
-                        </h3>
-
-                        {/* Tags */}
-                        {article.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {article.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="rounded-md px-2 py-0.5 text-xs"
-                                style={{
-                                  background: "var(--accent-subtle)",
-                                  color: "var(--accent)",
-                                }}
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Meta */}
-                        <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          <span>{formatRelativeDate(article.created_at)}</span>
-                          {article.conversation_length > 0 && (
-                            <>
-                              <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
-                              <span>{article.conversation_length} messages</span>
-                            </>
-                          )}
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              {/* Documents Section */}
-              <section>
-                <h2
-                  className="mb-4 text-sm font-semibold uppercase tracking-wider"
-                  style={{ color: "var(--text-tertiary)" }}
-                >
-                  Documents
-                </h2>
-
-                {project.documents.length === 0 && (
-                  <div
-                    className="flex flex-col items-center justify-center rounded-xl py-12 text-center"
-                    style={{
-                      background: "var(--bg-secondary)",
-                      border: "1px solid var(--border)",
-                      boxShadow: "var(--shadow-card)",
-                    }}
-                  >
-                    <div
-                      className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
-                      style={{
-                        background: "var(--accent-subtle)",
-                        border: "1px solid var(--border-accent)",
-                      }}
-                    >
-                      <svg className="h-6 w-6" style={{ color: "var(--accent)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                      </svg>
-                    </div>
-                    <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      No documents yet
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                      Upload documents using the button in the header
-                    </p>
-                  </div>
-                )}
-
-                {project.documents.length > 0 && (
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {project.documents.map((document, index) => (
-                      <motion.div
-                        key={document.source}
-                        initial={{ opacity: 0, y: 24 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: 0.6,
-                          ease: [0.16, 1, 0.3, 1],
-                          delay: index * 0.05,
-                        }}
-                        className={`group relative flex flex-col gap-3 rounded-xl p-4${document.document_id ? " cursor-pointer" : ""}`}
-                        style={{
-                          background: "var(--bg-secondary)",
-                          border: "1px solid var(--border)",
-                          boxShadow: "var(--shadow-card)",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = "var(--border-hover)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = "var(--border)";
-                        }}
-                        onClick={document.document_id ? () => router.push(`/projects/${slug}/documents/${document.document_id}`) : undefined}
-                      >
-                        {/* Delete button */}
-                        {document.document_id && (
                           <button
                             className="absolute top-3 right-3 rounded-lg p-1.5 opacity-0 transition-opacity cursor-pointer group-hover:opacity-100"
                             style={{ color: "var(--text-tertiary)" }}
                             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.background = "var(--error-bg)"; }}
                             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingDocument({ id: document.document_id!, source: document.source });
-                            }}
+                            onClick={(e) => { e.stopPropagation(); setDeletingArticle({ slug: article.slug, title: article.title }); }}
                           >
                             <TrashIcon />
                           </button>
-                        )}
 
-                        {/* Type badge */}
-                        <span
-                          className="inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                          style={{
-                            background: document.source_type === "pdf" ? "rgba(239, 68, 68, 0.1)" : "rgba(59, 130, 246, 0.1)",
-                            color: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                              style={{ background: src.bg, color: src.color }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: src.color }} />
+                              {src.label}
+                            </span>
+                          </div>
+
+                          <h3 className="text-sm font-medium leading-snug line-clamp-2" style={{ color: "var(--text-primary)" }}>
+                            {article.title}
+                          </h3>
+
+                          {article.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {article.tags.map((tag) => (
+                                <span key={tag} className="rounded-md px-2 py-0.5 text-xs" style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}>
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            <span>{formatRelativeDate(article.created_at)}</span>
+                            {article.conversation_length > 0 && (
+                              <>
+                                <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
+                                <span>{article.conversation_length} messages</span>
+                              </>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+
+                    {/* Documents */}
+                    {project.documents.map((doc, index) => {
+                      const src = getSourceInfo(doc.source_type === "pdf" ? "pdf" : "document");
+                      return (
+                        <motion.div
+                          key={`doc-${doc.document_id ?? doc.source}`}
+                          initial={{ opacity: 0, y: 24 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            duration: 0.6,
+                            ease: [0.16, 1, 0.3, 1],
+                            delay: (project.articles.length + index) * 0.05,
                           }}
+                          className={`group relative flex flex-col gap-3 rounded-xl p-4${doc.document_id ? " cursor-pointer" : ""}`}
+                          style={{
+                            background: "var(--bg-secondary)",
+                            border: "1px solid var(--border)",
+                            boxShadow: "var(--shadow-card)",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
+                          onClick={doc.document_id ? () => router.push(`/projects/${slug}/documents/${doc.document_id}`) : undefined}
                         >
-                          <span
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{
-                              background: document.source_type === "pdf" ? "#ef4444" : "#3b82f6",
-                            }}
-                          />
-                          {document.source_type === "pdf" ? "PDF" : "Document"}
-                        </span>
+                          {doc.document_id && (
+                            <button
+                              className="absolute top-3 right-3 rounded-lg p-1.5 opacity-0 transition-opacity cursor-pointer group-hover:opacity-100"
+                              style={{ color: "var(--text-tertiary)" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.background = "var(--error-bg)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
+                              onClick={(e) => { e.stopPropagation(); setDeletingDocument({ id: doc.document_id!, source: doc.source }); }}
+                            >
+                              <TrashIcon />
+                            </button>
+                          )}
 
-                        <h3
-                          className="text-sm font-medium leading-snug line-clamp-2"
-                          style={{ color: "var(--text-primary)" }}
-                        >
-                          {document.source}
-                        </h3>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                              style={{ background: src.bg, color: src.color }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: src.color }} />
+                              {src.label}
+                            </span>
+                          </div>
 
-                        <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          {document.chunk_count} {document.chunk_count === 1 ? "chunk" : "chunks"}
-                        </div>
-                      </motion.div>
-                    ))}
+                          <h3 className="text-sm font-medium leading-snug line-clamp-2" style={{ color: "var(--text-primary)" }}>
+                            {doc.source}
+                          </h3>
+
+                          <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            <span>{doc.chunk_count} {doc.chunk_count === 1 ? "chunk" : "chunks"}</span>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 )}
               </section>

@@ -1,0 +1,201 @@
+%-------------------------
+% Resume in Latex (modified to match uploaded PDF)
+% Author : Adapted for Subidh Khanal
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+% only for pdflatex
+% \input{glyphtounicode}
+
+% fontawesome
+\usepackage{fontawesome5}
+
+% fixed width
+\usepackage[scale=0.90,lf]{FiraMono}
+
+% light-grey
+\definecolor{light-grey}{gray}{0.83}
+\definecolor{dark-grey}{gray}{0.3}
+\definecolor{text-grey}{gray}{.08}
+
+\DeclareRobustCommand{\ebseries}{\fontseries{eb}\selectfont}
+\DeclareTextFontCommand{\texteb}{\ebseries}
+
+% custom underilne
+\usepackage{contour}
+\usepackage[normalem]{ulem}
+\renewcommand{\ULdepth}{1.8pt}
+\contourlength{0.8pt}
+\newcommand{\myuline}[1]{%
+  \uline{\phantom{#1}}%
+  \llap{\contour{white}{#1}}%
+}
+
+
+% custom font: helvetica-style
+\usepackage{tgheros}
+\renewcommand*\familydefault{\sfdefault} 
+%% Only if the base font of the document is to be sans serif
+\usepackage[T1]{fontenc}
+
+
+\pagestyle{fancy}
+\fancyhf{} % clear all header and footer fields
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{0in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting - sans serif
+\titleformat {\section}{
+    \bfseries \vspace{2pt} \raggedright \large % header section
+}{}{0em}{}[\color{light-grey} {\titlerule[2pt]} \vspace{-4pt}]
+
+%-------------------------
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-1pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-1pt}\item
+    \begin{tabular*}{\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & {\color{dark-grey}\small #2}\vspace{1pt}\\ % top row of resume entry
+      \textit{#3} & {\color{dark-grey} \small #4}\\ % second row of resume entry
+    \end{tabular*}\vspace{-4pt}
+}
+
+\newcommand{\resumeSubSubheading}[2]{
+    \item
+    \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+      \textit{\small#1} & \textit{\small #2} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}r}
+      #1 & {\color{dark-grey}} \\
+    \end{tabular*}\vspace{-4pt}
+}
+
+\newcommand{\resumeSubItem}[1]{\resumeItem{#1}\vspace{-4pt}}
+
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+% CHANGED default leftmargin  0.15 in
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{0pt}}
+
+\color{text-grey}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    \textbf{\Huge Subidh Khanal} \\ \vspace{5pt}
+    \small \faPhone* \texttt{+91-8527394809} \hspace{1pt} $|$
+    \hspace{1pt} \faEnvelope \hspace{2pt} \texttt{subidhkhanal38@gmail.com} \hspace{1pt} $|$ 
+    \hspace{1pt} \faLinkedin \hspace{2pt} \href{https://www.linkedin.com/in/subidh-khanal}{subidh} \hspace{1pt} 
+    \\ \vspace{-3pt}
+\end{center}
+
+%-----------ABOUT-----------
+\section{ABOUT}
+Developed immigration platform - automated data ingestion and publishing for Facebook, Instagram, X, and threads. Developed BCT Engineering Notes, Nepal’s top computer‑engineering blog with 2.2 Million+ organic views achieved 904\% YOY growth in 2021, 66.08\% YOY in 2020 with zero ad spend.
+
+
+%-----------EXPERIENCE-----------
+\section{EXPERIENCE}
+  \resumeSubHeadingListStart
+
+    \resumeSubheading
+      {PathToPR}{{\href{https://www.pathtopr.ca}{\myuline {Link}}}}
+      {Software Engineer Intern}{Oct 2025 -- Jan 2026}
+      \resumeItemListStart
+        \resumeItem{Implemented automatic extraction of immigration news and draws from various sources}
+         \resumeItem{Automated the distribution of updates to Facebook, Instagram, Telegram and X using social-media APIs}
+         \resumeItem{Automated the generation of the content,images using the OpenAI and Gemini API}
+      \resumeItemListEnd
+
+  \resumeSubHeadingListEnd
+
+
+%-----------PROJECT-----------
+\section{PROJECTS }
+  \resumeSubHeadingListStart
+      \resumeProjectHeading
+         {\textbf{Personal Knowledge Base}}{{{\href{https://www.pathtopr.ca}{\myuline {Link}}}}}
+          \resumeItemListStart
+            \resumeItem{Built a {\href{https://personal-assistant-olive.vercel.app}{\myuline {personal knowledge site}}} to organize and search user documents}
+            \resumeItem{Developed a RAG-based chatbot with hybrid search, LLM integration, and Cohere reranking for accurate, citation-backed responses from user-uploaded documents}
+            \resumeItem{Implemented multi-format document processing (PDF, EPUB, DOCX), token-based chunking, vector storage, and conversational AI interface}
+          \resumeItemListEnd
+        
+        \resumeProjectHeading
+         {\textbf{BCT Engineering Notes}}{Sept. 2019 -- May 2020}
+          \resumeItemListStart
+            \resumeItem{Built Nepal Most Popular {\href{https://bctengineeringnotes.blogspot.com}{\myuline {Computer Engineering Blog}}} with 87,217/monthly views during exam time}
+            \resumeItem{{\href{https://drive.google.com/file/d/1lb-xTjTumjS-CJD4gKBDcF1pKCFlw4LK/view?usp=sharing}{\myuline {Grew it}}} 200\% YOY in 2022, 904\% YOY in 2021, 66.08\% YOY in 2020 but spent \$0 spent on advertising} 
+            \resumeItem{Optimized content to achieve a 20.1\% click-through rate (CTR), ranking in the Top 5 positions for 37 keywords and averaging 8.6 positions across 1,001 keywords}
+          \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+%-----------EDUCATION-----------
+\section {EDUCATION}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Amity University}{Aug 2024 -- Present}
+      {M.Tech in Artificial Intelligence}{Uttar Pradesh, India}
+
+    \resumeSubheading
+      {Tribhuvan University}{}
+      {Bachelor in Computer Engineering }{Kathmandu, India}
+  \resumeSubHeadingListEnd
+
+
+ %
+%-----------PROGRAMMING SKILLS-----------
+\section{SKILLS}
+ \begin{itemize}[leftmargin=0in, label={}]
+    \small{\item{
+     \textbf{Front-end} {: Next.js, Material UI, Tailwind CSS}\\
+     \textbf{Back-end} {: Python, FastAPI}\\
+     \textbf{AI/LLM} {: OpenAI API}\\
+     \textbf{Database} {: SQL}\vspace{2pt} \\
+    }}
+ \end{itemize}
+
+%-------------------------------------------
+\end{document}

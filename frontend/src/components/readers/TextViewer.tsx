@@ -38,7 +38,7 @@ export default function TextViewer({ documentId, filename }: TextViewerProps) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex justify-center py-16">
         <p className="text-sm" style={{ color: "var(--error)" }}>{error}</p>
       </div>
     );
@@ -46,8 +46,8 @@ export default function TextViewer({ documentId, filename }: TextViewerProps) {
 
   if (content === null) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <svg className="h-8 w-8 animate-spin" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none">
+      <div className="flex justify-center py-16">
+        <svg className="h-6 w-6 animate-spin" style={{ color: "var(--accent)" }} viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
@@ -55,24 +55,18 @@ export default function TextViewer({ documentId, filename }: TextViewerProps) {
     );
   }
 
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-6 py-12">
-        {isHtml ? (
-          <div
-            className="prose-chat text-sm leading-relaxed"
-            style={{ color: "var(--text-primary)" }}
-            dangerouslySetInnerHTML={{ __html: content }}
-          />
-        ) : (
-          <pre
-            className="whitespace-pre-wrap text-sm leading-relaxed"
-            style={{ color: "var(--text-primary)", fontFamily: "inherit" }}
-          >
-            {content}
-          </pre>
-        )}
-      </div>
-    </div>
+  return isHtml ? (
+    <div
+      className="prose-chat text-sm leading-relaxed"
+      style={{ color: "var(--text-primary)" }}
+      dangerouslySetInnerHTML={{ __html: content }}
+    />
+  ) : (
+    <pre
+      className="whitespace-pre-wrap text-sm leading-relaxed"
+      style={{ color: "var(--text-primary)", fontFamily: "inherit" }}
+    >
+      {content}
+    </pre>
   );
 }
