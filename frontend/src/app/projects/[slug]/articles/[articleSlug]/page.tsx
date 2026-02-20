@@ -88,7 +88,7 @@ function ArticleReaderContent({
       className="h-screen overflow-y-auto"
       style={{ background: "var(--bg-primary)" }}
     >
-      <Header onFileUpload={handleFileUpload} />
+      <Header onUploadClick={handleFileUpload} />
 
       <main className="mx-auto max-w-2xl px-6 py-12">
         {/* Back link */}
