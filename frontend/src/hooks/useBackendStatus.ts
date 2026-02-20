@@ -9,7 +9,7 @@ export type BackendStatus = "checking" | "waking" | "online" | "offline";
 const INITIAL_GRACE_MS = 3000;
 const RETRY_INTERVAL_MS = 3000;
 const REQUEST_TIMEOUT_MS = 5000;
-const MAX_TIMEOUT_MS = 90000;
+const MAX_TIMEOUT_MS = 60000;
 
 export function useBackendStatus() {
   const [status, setStatus] = useState<BackendStatus>("checking");

@@ -12,16 +12,24 @@ interface BackendStatusBannerProps {
 
 export function BackendStatusBanner({ status, elapsedSeconds, onRetry }: BackendStatusBannerProps) {
   const [dismissed, setDismissed] = useState(false);
+  const [wasSlowStart, setWasSlowStart] = useState(false);
 
   useEffect(() => {
-    if (status === "online") {
-      const timer = setTimeout(() => setDismissed(true), 3000);
-      return () => clearTimeout(timer);
+    if (status === "waking" || status === "offline") {
+      setWasSlowStart(true);
     }
-    setDismissed(false);
-  }, [status]);
+    if (status === "online") {
+      if (wasSlowStart) {
+        const timer = setTimeout(() => setDismissed(true), 3000);
+        return () => clearTimeout(timer);
+      }
+      setDismissed(true);
+    } else {
+      setDismissed(false);
+    }
+  }, [status, wasSlowStart]);
 
-  const shouldShow = status !== "checking" && !dismissed;
+  const shouldShow = wasSlowStart && !dismissed;
 
   return (
     <AnimatePresence>
