@@ -12,7 +12,7 @@ import type { ChatMode, ResearchQuality } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import type { Source } from "@/types/chat";
 
-const HIDDEN_PATHS = ["/login"];
+const HIDDEN_PATHS = ["/login", "/settings"];
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 320;
 const WIDGET_STORAGE_KEY = "kb_widget_conversations";

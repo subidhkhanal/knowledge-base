@@ -6,14 +6,42 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSettings, FONT_FAMILY_OPTIONS, FONT_SIZE_OPTIONS, type FontFamily, type FontSize } from "@/contexts/SettingsContext";
 import { Header } from "@/components/Header";
 
+interface TavilyUsageData {
+  total_usage: number;
+  limit: number | null;
+  plan: string;
+  search_usage: number;
+  extract_usage: number;
+}
+
+function parseTavilyResponse(data: Record<string, unknown>): TavilyUsageData {
+  // Tavily API returns nested structure: { key: { usage, limit, ... }, account: { current_plan, ... } }
+  // or flat structure depending on version. Handle both.
+  const key = data.key as Record<string, unknown> | undefined;
+  const account = data.account as Record<string, unknown> | undefined;
+
+  if (key) {
+    return {
+      total_usage: (key.usage as number) ?? 0,
+      limit: (key.limit as number | null) ?? null,
+      plan: (account?.current_plan as string) ?? "Unknown",
+      search_usage: (key.search_usage as number) ?? 0,
+      extract_usage: (key.extract_usage as number) ?? 0,
+    };
+  }
+
+  // Flat structure fallback
+  return {
+    total_usage: (data.usage as number) ?? 0,
+    limit: (data.limit as number | null) ?? null,
+    plan: (data.current_plan as string) ?? "Unknown",
+    search_usage: (data.search_usage as number) ?? 0,
+    extract_usage: (data.extract_usage as number) ?? 0,
+  };
+}
+
 function TavilyUsageDisplay({ apiKey }: { apiKey: string }) {
-  const [usage, setUsage] = useState<{
-    usage: number;
-    limit: number;
-    current_plan: string;
-    search_usage: number;
-    extract_usage: number;
-  } | null>(null);
+  const [usage, setUsage] = useState<TavilyUsageData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +54,7 @@ function TavilyUsageDisplay({ apiKey }: { apiKey: string }) {
       });
       if (!res.ok) throw new Error("Failed to fetch usage");
       const data = await res.json();
-      setUsage(data);
+      setUsage(parseTavilyResponse(data));
     } catch {
       setError("Could not load usage data");
     } finally {
@@ -63,7 +91,8 @@ function TavilyUsageDisplay({ apiKey }: { apiKey: string }) {
 
   if (!usage) return null;
 
-  const usagePercent = usage.limit ? Math.round((usage.usage / usage.limit) * 100) : 0;
+  const hasLimit = usage.limit !== null && usage.limit > 0;
+  const usagePercent = hasLimit ? Math.round((usage.total_usage / usage.limit!) * 100) : 0;
 
   return (
     <div className="mt-3 rounded-lg p-3" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
@@ -72,12 +101,12 @@ function TavilyUsageDisplay({ apiKey }: { apiKey: string }) {
           Monthly Usage
         </span>
         <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-          {usage.current_plan} plan
+          {usage.plan} plan
         </span>
       </div>
 
       {/* Progress bar */}
-      {usage.limit > 0 && (
+      {hasLimit && (
         <div className="h-1.5 rounded-full mb-2" style={{ background: "var(--bg-tertiary)" }}>
           <div
             className="h-full rounded-full transition-all"
@@ -91,9 +120,9 @@ function TavilyUsageDisplay({ apiKey }: { apiKey: string }) {
 
       <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-tertiary)" }}>
         <span>
-          {usage.usage.toLocaleString()} / {usage.limit ? usage.limit.toLocaleString() : "\u221E"} credits
+          {usage.total_usage.toLocaleString()} / {hasLimit ? usage.limit!.toLocaleString() : "\u221E"} credits
         </span>
-        {usage.limit > 0 && <span>{usagePercent}%</span>}
+        {hasLimit && <span>{usagePercent}%</span>}
       </div>
 
       <div className="mt-2 flex gap-4 text-xs" style={{ color: "var(--text-tertiary)" }}>
