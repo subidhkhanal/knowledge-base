@@ -17,12 +17,14 @@ from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
 from backend.retrieval.bm25_index import BM25Index
 from backend.config import (
-    MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING, SQLITE_DB_PATH,
+    MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING,
     CHUNKING_METHOD, USE_HYBRID_RETRIEVAL, UPLOADS_DIR
 )
 from backend.routing import QueryRouter, RouteHandlers
 from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_user, get_optional_user
 from backend.auth.database import init_db, get_db
+from backend.db.connection import close_pools, get_central_db
+from backend.projects.database import insert_project as _create_default_project
 from backend.conversations import ConversationService
 from backend.articles import articles_router
 from backend.projects import projects_router
@@ -82,16 +84,12 @@ class _MCPQueryTokenMiddleware:
                 params = parse_qs(qs)
                 token = params.get("token", [None])[0]
                 if token:
-                    # Look up token in DB
-                    import aiosqlite
-                    from backend.config import SQLITE_DB_PATH
-                    db = await aiosqlite.connect(SQLITE_DB_PATH)
-                    db.row_factory = aiosqlite.Row
+                    # Look up token in central DB
+                    db = await get_central_db()
                     try:
-                        cursor = await db.execute(
-                            "SELECT id FROM users WHERE mcp_token = ?", (token,)
+                        row = await db.fetch_one(
+                            "SELECT id FROM users WHERE mcp_token = $1", token
                         )
-                        row = await cursor.fetchone()
                     finally:
                         await db.close()
 
@@ -146,9 +144,13 @@ _a2a_app.add_routes_to_app(
 
 @app.on_event("startup")
 async def startup():
-    os.makedirs(os.path.dirname(SQLITE_DB_PATH), exist_ok=True)
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     await init_db()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await close_pools()
 
 
 # --- Auth endpoints (no auth required) ---
@@ -161,6 +163,13 @@ async def register(user: UserCreate):
         if existing:
             raise HTTPException(status_code=400, detail="Username already taken")
         user_id = await AuthService.create_user(db, user.username, user.password)
+        # Create default "Uncategorized" project for the new user
+        await _create_default_project(
+            slug="uncategorized",
+            title="Uncategorized",
+            description="Default project for unsorted articles and documents",
+            user_id=user_id,
+        )
         token = AuthService.create_token(user_id, user.username)
         return {"access_token": token, "token_type": "bearer", "user_id": user_id, "username": user.username}
     finally:
@@ -190,10 +199,9 @@ async def generate_mcp_token(current_user: dict = Depends(get_current_user)):
     db = await get_db()
     try:
         await db.execute(
-            "UPDATE users SET mcp_token = ? WHERE id = ?",
-            (token, current_user["user_id"]),
+            "UPDATE users SET mcp_token = $1 WHERE id = $2",
+            token, current_user["user_id"],
         )
-        await db.commit()
         return {"mcp_token": token}
     finally:
         await db.close()
@@ -205,10 +213,9 @@ async def revoke_mcp_token(current_user: dict = Depends(get_current_user)):
     db = await get_db()
     try:
         await db.execute(
-            "UPDATE users SET mcp_token = NULL WHERE id = ?",
-            (current_user["user_id"],),
+            "UPDATE users SET mcp_token = NULL WHERE id = $1",
+            current_user["user_id"],
         )
-        await db.commit()
         return {"message": "MCP token revoked"}
     finally:
         await db.close()
@@ -219,11 +226,10 @@ async def get_mcp_token_status(current_user: dict = Depends(get_current_user)):
     """Check if user has an MCP token (without revealing it)."""
     db = await get_db()
     try:
-        cursor = await db.execute(
-            "SELECT mcp_token FROM users WHERE id = ?",
-            (current_user["user_id"],),
+        row = await db.fetch_one(
+            "SELECT mcp_token FROM users WHERE id = $1",
+            current_user["user_id"],
         )
-        row = await cursor.fetchone()
         has_token = row is not None and row["mcp_token"] is not None
         return {"has_token": has_token}
     finally:
@@ -611,8 +617,8 @@ async def query(
     if request.conversation_id and user_id_int:
         if not await ConversationService.verify_ownership(request.conversation_id, user_id_int):
             raise HTTPException(status_code=404, detail="Conversation not found")
-        chat_history = await ConversationService.get_recent_history(request.conversation_id)
-        await ConversationService.add_message(request.conversation_id, "user", request.question)
+        chat_history = await ConversationService.get_recent_history(request.conversation_id, user_id=user_id_int)
+        await ConversationService.add_message(request.conversation_id, "user", request.question, user_id=user_id_int)
 
     # Create per-request LLM instances if user provided their own Groq key
     if groq_api_key:
@@ -699,7 +705,7 @@ async def query(
         if request.conversation_id and user_id_int:
             full_answer = "".join(accumulated_answer)
             await ConversationService.add_message(
-                request.conversation_id, "assistant", full_answer, final_sources
+                request.conversation_id, "assistant", full_answer, final_sources, user_id=user_id_int
             )
 
     return StreamingResponse(
@@ -730,7 +736,7 @@ async def get_messages(conv_id: int, current_user: dict = Depends(get_current_us
     """Get all messages in a conversation."""
     if not await ConversationService.verify_ownership(conv_id, current_user["user_id"]):
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return await ConversationService.get_messages(conv_id)
+    return await ConversationService.get_messages(conv_id, user_id=current_user["user_id"])
 
 
 @app.delete("/api/conversations/{conv_id}")
@@ -796,7 +802,7 @@ async def delete_document(
     doc_id: int,
     current_user: dict = Depends(get_optional_user),
 ):
-    """Delete a document: SQLite record, Pinecone vectors, and file on disk."""
+    """Delete a document: DB record, Pinecone vectors, and file on disk."""
     from backend.documents import database as documents_db
 
     user_id = current_user["user_id"] if current_user else None

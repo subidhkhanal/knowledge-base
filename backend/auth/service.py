@@ -3,10 +3,10 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 
-import aiosqlite
 from jose import jwt
 
 from backend.config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
+from backend.db.connection import Database
 
 
 class AuthService:
@@ -35,16 +35,16 @@ class AuthService:
         return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
 
     @staticmethod
-    async def create_user(db: aiosqlite.Connection, username: str, password: str) -> int:
+    async def create_user(db: Database, username: str, password: str) -> int:
         hashed = AuthService.hash_password(password)
-        cursor = await db.execute(
-            "INSERT INTO users (username, hashed_password) VALUES (?, ?)",
-            (username, hashed)
+        result = await db.execute(
+            "INSERT INTO users (username, hashed_password) VALUES ($1, $2)",
+            username, hashed,
         )
-        await db.commit()
-        return cursor.lastrowid
+        return result.lastrowid
 
     @staticmethod
-    async def get_user_by_username(db: aiosqlite.Connection, username: str):
-        cursor = await db.execute("SELECT * FROM users WHERE username = ?", (username,))
-        return await cursor.fetchone()
+    async def get_user_by_username(db: Database, username: str):
+        return await db.fetch_one(
+            "SELECT * FROM users WHERE username = $1", username
+        )

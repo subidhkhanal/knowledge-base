@@ -29,7 +29,8 @@ export function useDocument(id: number) {
       } else if (res.status === 404) {
         setError("Document not found");
       } else {
-        setError("Failed to load document");
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || "Failed to load document");
       }
     } catch {
       setError("Failed to connect to the server");

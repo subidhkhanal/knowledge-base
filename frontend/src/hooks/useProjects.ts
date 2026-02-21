@@ -75,7 +75,8 @@ export function useProjects() {
         const data = await res.json();
         setProjects(data.projects || []);
       } else {
-        setError("Failed to load projects");
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || "Failed to load projects");
       }
     } catch {
       setError("Failed to connect to the server");
@@ -109,7 +110,8 @@ export function useProject(slug: string) {
       } else if (res.status === 404) {
         setError("Project not found");
       } else {
-        setError("Failed to load project");
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || "Failed to load project");
       }
     } catch {
       setError("Failed to connect to the server");

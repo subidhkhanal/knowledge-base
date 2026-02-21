@@ -42,7 +42,7 @@ async def create_project(
     # Ensure unique slug
     base_slug = slug
     counter = 1
-    while await db.slug_exists(slug):
+    while await db.slug_exists(slug, user_id):
         slug = f"{base_slug}-{counter}"
         counter += 1
 
@@ -53,7 +53,7 @@ async def create_project(
         user_id=user_id,
     )
 
-    project = await db.get_project_by_slug(slug)
+    project = await db.get_project_by_slug(slug, user_id)
     return ProjectResponse(
         id=project["id"],
         slug=project["slug"],
@@ -96,7 +96,7 @@ async def get_project_detail(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Get articles for this project
-    articles = await articles_db.get_articles_by_project(project["id"])
+    articles = await articles_db.get_articles_by_project(project["id"], user_id=user_id)
 
     # Get documents from Pinecone tagged with this project
     components = _get_components()
@@ -112,13 +112,13 @@ async def get_project_detail(
     except Exception:
         pass
 
-    # Enrich documents with document_id from SQLite for reader links
-    sqlite_docs = await documents_db.get_documents_by_project(project["id"])
+    # Enrich documents with document_id from DB for reader links
+    sqlite_docs = await documents_db.get_documents_by_project(project["id"], user_id=user_id)
     doc_id_map = {d["filename"]: d["id"] for d in sqlite_docs}
     for doc in documents:
         doc["document_id"] = doc_id_map.get(doc.get("source"))
 
-    # Add any SQLite documents not yet in Pinecone
+    # Add any DB documents not yet in Pinecone
     existing_sources = {d.get("source") for d in documents}
     for sd in sqlite_docs:
         if sd["filename"] not in existing_sources:
@@ -211,7 +211,7 @@ async def project_scoped_query(
     groq_api_key = http_request.headers.get("x-groq-api-key")
 
     # Get article titles for this project (used as Pinecone source filter)
-    project_articles = await articles_db.get_articles_by_project(project_id)
+    project_articles = await articles_db.get_articles_by_project(project_id, user_id=user_id)
     article_titles = [a["title"] for a in project_articles]
 
     # Create per-request LLM if user provided their own key

@@ -174,7 +174,7 @@ async def list_articles(
         project_id = await projects_db.get_project_id_by_slug(project_slug, int(uid))
         if project_id is None:
             return f"Project '{project_slug}' not found."
-        articles = await articles_db.get_articles_by_project(project_id)
+        articles = await articles_db.get_articles_by_project(project_id, user_id=int(uid))
     else:
         articles = await articles_db.get_all_articles(user_id=int(uid))
 
@@ -300,7 +300,7 @@ async def start_research(
         None,  # groq_api_key
     )
 
-    # Save to SQLite
+    # Save to database
     await articles_db.insert_article(
         slug=result["slug"],
         title=result["title"],
@@ -378,7 +378,7 @@ async def add_article(
         project_id=project_id,
     )
 
-    # Save to SQLite
+    # Save to database
     await articles_db.insert_article(
         slug=result["slug"],
         title=title,
@@ -483,7 +483,7 @@ async def add_web_article(
         project_id=project_id,
     )
 
-    # Save to SQLite
+    # Save to database
     await articles_db.insert_article(
         slug=result["slug"],
         title=title,
@@ -549,10 +549,11 @@ async def get_stats() -> str:
     """Knowledge base statistics: article count, chunk count, source count."""
     from backend.articles import database as articles_db
 
+    uid = _resolve_user_id()
     components = _get_components()
-    sources = components["vector_store"].get_all_sources()
+    sources = components["vector_store"].get_all_sources(user_id=uid)
     total_chunks = components["vector_store"].count()
-    articles = await articles_db.get_all_articles()
+    articles = await articles_db.get_all_articles(user_id=int(uid))
 
     return json.dumps({
         "total_articles": len(articles),
@@ -574,7 +575,8 @@ async def summarize_article(slug: str) -> str:
     """Generate a prompt to summarize a specific article from the knowledge base."""
     from backend.articles import database as articles_db
 
-    article = await articles_db.get_article_by_slug(slug)
+    uid = _resolve_user_id()
+    article = await articles_db.get_article_by_slug(slug, user_id=int(uid))
     if not article:
         return f"Article with slug '{slug}' not found."
 
@@ -591,8 +593,9 @@ async def compare_articles(slug1: str, slug2: str) -> str:
     """Generate a prompt to compare two articles from the knowledge base."""
     from backend.articles import database as articles_db
 
-    article1 = await articles_db.get_article_by_slug(slug1)
-    article2 = await articles_db.get_article_by_slug(slug2)
+    uid = _resolve_user_id()
+    article1 = await articles_db.get_article_by_slug(slug1, user_id=int(uid))
+    article2 = await articles_db.get_article_by_slug(slug2, user_id=int(uid))
 
     if not article1:
         return f"Article with slug '{slug1}' not found."

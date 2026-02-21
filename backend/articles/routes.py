@@ -52,7 +52,7 @@ async def publish_conversation(
             project_id=project_id,
         )
 
-        # Save to SQLite
+        # Save to database
         if request.update_slug:
             await db.update_article(
                 slug=result["slug"],
@@ -62,6 +62,7 @@ async def publish_conversation(
                 chunks_count=result["chunks_count"],
                 conversation_length=result["conversation_length"],
                 content_html=result.get("content_html"),
+                user_id=current_user["user_id"],
             )
         else:
             await db.insert_article(
@@ -162,6 +163,7 @@ async def update_article(
         chunks_count=result["chunks_count"],
         conversation_length=result["conversation_length"],
         content_html=result.get("content_html"),
+        user_id=current_user["user_id"],
     )
 
     return PublishResponse(
@@ -178,7 +180,7 @@ async def delete_article_endpoint(
 ):
     """Delete an article and its vector embeddings."""
     # Get article title for Pinecone deletion
-    title = await db.get_article_title_by_slug(slug)
+    title = await db.get_article_title_by_slug(slug, user_id=current_user["user_id"])
     if not title:
         raise HTTPException(status_code=404, detail="Article not found")
 
@@ -193,7 +195,7 @@ async def delete_article_endpoint(
     except Exception:
         pass  # Best effort
 
-    # Delete from SQLite
+    # Delete from database
     deleted = await db.delete_article(slug, current_user["user_id"])
     if not deleted:
         raise HTTPException(status_code=404, detail="Article not found")
@@ -240,7 +242,7 @@ async def publish_web_article(
             project_id=project_id,
         )
 
-        # Save to SQLite
+        # Save to database
         await db.insert_article(
             slug=result["slug"],
             title=request.title,
@@ -286,7 +288,7 @@ async def reprocess_article_html(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reprocessing failed: {str(e)}")
 
-    await db.update_article_html(slug, content_html)
+    await db.update_article_html(slug, content_html, user_id=current_user["user_id"])
 
     return {"success": True, "slug": slug, "content_html_length": len(content_html)}
 
@@ -309,7 +311,7 @@ async def reprocess_all_articles(
                 article["content_markdown"], article["title"],
                 groq_api_key=groq_api_key,
             )
-            await db.update_article_html(article["slug"], content_html)
+            await db.update_article_html(article["slug"], content_html, user_id=current_user["user_id"])
             results.append({"slug": article["slug"], "status": "success"})
         except Exception as e:
             results.append({"slug": article["slug"], "status": "error", "detail": str(e)})

@@ -35,7 +35,8 @@ export function useArticles() {
         const data = await res.json();
         setArticles(data.articles || []);
       } else {
-        setError("Failed to load articles");
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || "Failed to load articles");
       }
     } catch {
       setError("Failed to connect to the server");
@@ -70,7 +71,8 @@ export function useArticle(slug: string) {
       } else if (res.status === 404) {
         setError("Article not found");
       } else {
-        setError("Failed to load article");
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || "Failed to load article");
       }
     } catch {
       setError("Failed to connect to the server");
