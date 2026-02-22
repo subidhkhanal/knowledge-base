@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import json
+import time
 import uvicorn
 
 from backend.ingestion import (
@@ -354,6 +355,12 @@ class UploadResponse(BaseModel):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/keep-alive")
+def keep_alive():
+    """Endpoint that forces actual server processing to prevent Render sleep"""
+    return {"status": "alive", "timestamp": time.time()}
 
 
 # Root endpoint (no auth)
