@@ -374,6 +374,30 @@ export function ChatWidget() {
           }
         }
       }
+
+      // Process any remaining data left in buffer after stream ends
+      if (buffer.trim()) {
+        const line = buffer.trim();
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.slice(6);
+          if (jsonStr) {
+            try {
+              const data = JSON.parse(jsonStr);
+              if (data.type === "token") {
+                tokenQueueRef.current.push({ type: "token", content: data.content });
+                startDraining(assistantId);
+              } else if (data.type === "done") {
+                tokenQueueRef.current.push({
+                  type: "done",
+                  content: "",
+                  sources: data.sources,
+                  provider: data.provider,
+                });
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
+      }
     } catch {
       if (drainIntervalRef.current) {
         clearInterval(drainIntervalRef.current);

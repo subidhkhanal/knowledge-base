@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
 import json
@@ -354,13 +354,10 @@ class UploadResponse(BaseModel):
 # Health check endpoint (responds immediately, no heavy loading, no auth)
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
-
-
-@app.get("/keep-alive")
-def keep_alive():
-    """Endpoint that forces actual server processing to prevent Render sleep"""
-    return {"status": "alive", "timestamp": time.time()}
+    return JSONResponse(
+        content={"status": "healthy", "timestamp": time.time()},
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"}
+    )
 
 
 # Root endpoint (no auth)

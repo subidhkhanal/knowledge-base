@@ -1,3 +1,5 @@
+import asyncio
+import queue
 from typing import List, Dict, Any, Optional, AsyncGenerator
 from groq import Groq
 from backend.config import (
@@ -129,11 +131,28 @@ Answer the question based on the context above. Do NOT include source citations 
         context = self._format_context(chunks)
         prompt = self._build_prompt(query, context)
 
-        try:
-            for token in self._call_groq_stream(prompt):
-                yield {"type": "token", "content": token}
-        except Exception:
-            yield {"type": "token", "content": "I'm unable to generate a response. Please check your API keys."}
+        # Run sync Groq stream in a thread to avoid blocking the event loop,
+        # which would prevent FastAPI from flushing SSE chunks in real-time.
+        token_queue: queue.Queue = queue.Queue()
+
+        def _run_sync_stream():
+            try:
+                for token in self._call_groq_stream(prompt):
+                    token_queue.put({"type": "token", "content": token})
+            except Exception:
+                token_queue.put({"type": "token", "content": "I'm unable to generate a response. Please check your API keys."})
+            token_queue.put(None)  # sentinel to signal completion
+
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _run_sync_stream)
+
+        while True:
+            while token_queue.empty():
+                await asyncio.sleep(0.01)
+            item = token_queue.get()
+            if item is None:
+                break
+            yield item
 
         yield {
             "type": "done",
