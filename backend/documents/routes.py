@@ -1,8 +1,7 @@
 """FastAPI router for document file serving."""
 
-import os
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from typing import Optional
 
 from backend.auth import get_optional_user
@@ -43,12 +42,14 @@ async def serve_document_file(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    file_path = document["storage_path"]
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="File not found on disk")
+    from backend.storage.supabase_storage import download_file
+    try:
+        file_bytes = download_file(document["storage_path"])
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found in storage")
 
-    return FileResponse(
-        path=file_path,
-        filename=document["filename"],
+    return Response(
+        content=file_bytes,
         media_type=document["mime_type"],
+        headers={"Content-Disposition": f'inline; filename="{document["filename"]}"'},
     )

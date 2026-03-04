@@ -522,9 +522,10 @@ async def upload_document(
         bm25_index.add_chunks(bm25_items)
         bm25_index.save()
 
-    # Save original file to disk for the document reader
+    # Save original file to Supabase Storage for the document reader
     import uuid as _uuid
     from backend.documents.database import insert_document
+    from backend.storage.supabase_storage import upload_file as upload_to_supabase
 
     MIME_MAP = {
         ".pdf": "application/pdf",
@@ -538,10 +539,10 @@ async def upload_document(
         ".markdown": "text/markdown",
     }
 
-    storage_filename = f"{_uuid.uuid4().hex}{ext}"
-    storage_path = os.path.join(UPLOADS_DIR, storage_filename)
-    with open(storage_path, "wb") as f:
-        f.write(content)
+    storage_key = f"{_uuid.uuid4().hex}{ext}"
+    mime_type = MIME_MAP.get(ext, "application/octet-stream")
+    upload_to_supabase(storage_key, content, mime_type)
+    storage_path = storage_key  # store the Supabase key instead of a local path
 
     user_id_int = current_user["user_id"] if current_user else None
     doc_id = await insert_document(
@@ -549,7 +550,7 @@ async def upload_document(
         storage_path=storage_path,
         extension=ext,
         size_bytes=len(content),
-        mime_type=MIME_MAP.get(ext, "application/octet-stream"),
+        mime_type=mime_type,
         user_id=user_id_int,
         project_id=project_id,
     )
@@ -857,12 +858,12 @@ async def delete_document(
     except Exception:
         pass  # Best effort — vectors may already be gone
 
-    # Delete physical file
+    # Delete file from Supabase Storage
     try:
-        if os.path.exists(doc["storage_path"]):
-            os.remove(doc["storage_path"])
+        from backend.storage.supabase_storage import delete_file as delete_from_supabase
+        delete_from_supabase(doc["storage_path"])
     except Exception:
-        pass  # Best effort
+        pass  # Best effort — file may not exist
 
     return {
         "success": True,

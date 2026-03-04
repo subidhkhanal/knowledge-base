@@ -44,6 +44,9 @@ python-jose[cryptography]>=3.3.0
 # Database (PostgreSQL)
 asyncpg>=0.29.0
 
+# Supabase (Storage)
+supabase>=2.0.0
+
 # Research Agent
 tavily-python
 
