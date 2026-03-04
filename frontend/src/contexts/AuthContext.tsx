@@ -4,13 +4,15 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 
 interface AuthState {
   token: string | null;
+  refreshToken: string | null;
   username: string | null;
   groqApiKey: string | null;
   tavilyApiKey: string | null;
   isLoggedIn: boolean;
   isLoading: boolean;
-  login: (token: string, username: string) => void;
+  login: (token: string, username: string, refreshToken: string) => void;
   logout: () => void;
+  updateToken: (newToken: string) => void;
   setGroqKey: (key: string) => void;
   setTavilyKey: (key: string) => void;
 }
@@ -19,6 +21,7 @@ const AuthContext = createContext<AuthState | null>(null);
 
 const STORAGE_KEYS = {
   token: "kb_auth_token",
+  refreshToken: "kb_refresh_token",
   username: "kb_username",
   groqKey: "kb_groq_key",
   tavilyKey: "kb_tavily_key",
@@ -26,6 +29,7 @@ const STORAGE_KEYS = {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [groqApiKey, setGroqApiKey] = useState<string | null>(null);
   const [tavilyApiKey, setTavilyApiKey] = useState<string | null>(null);
@@ -34,28 +38,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Load from localStorage on mount
   useEffect(() => {
     setToken(localStorage.getItem(STORAGE_KEYS.token));
+    setRefreshToken(localStorage.getItem(STORAGE_KEYS.refreshToken));
     setUsername(localStorage.getItem(STORAGE_KEYS.username));
     setGroqApiKey(localStorage.getItem(STORAGE_KEYS.groqKey));
     setTavilyApiKey(localStorage.getItem(STORAGE_KEYS.tavilyKey));
     setIsLoading(false);
   }, []);
 
-  const login = useCallback((newToken: string, newUsername: string) => {
+  const login = useCallback((newToken: string, newUsername: string, newRefreshToken: string) => {
     localStorage.setItem(STORAGE_KEYS.token, newToken);
+    localStorage.setItem(STORAGE_KEYS.refreshToken, newRefreshToken);
     localStorage.setItem(STORAGE_KEYS.username, newUsername);
     setToken(newToken);
+    setRefreshToken(newRefreshToken);
     setUsername(newUsername);
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem(STORAGE_KEYS.token);
+    localStorage.removeItem(STORAGE_KEYS.refreshToken);
     localStorage.removeItem(STORAGE_KEYS.username);
     localStorage.removeItem(STORAGE_KEYS.groqKey);
     localStorage.removeItem(STORAGE_KEYS.tavilyKey);
     setToken(null);
+    setRefreshToken(null);
     setUsername(null);
     setGroqApiKey(null);
     setTavilyApiKey(null);
+  }, []);
+
+  const updateToken = useCallback((newToken: string) => {
+    localStorage.setItem(STORAGE_KEYS.token, newToken);
+    setToken(newToken);
   }, []);
 
   const setGroqKey = useCallback((key: string) => {
@@ -71,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext value={{
       token,
+      refreshToken,
       username,
       groqApiKey,
       tavilyApiKey,
@@ -78,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       logout,
+      updateToken,
       setGroqKey,
       setTavilyKey,
     }}>

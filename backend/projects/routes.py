@@ -210,9 +210,10 @@ async def project_scoped_query(
     user_id_str = str(user_id) if user_id else None
     groq_api_key = http_request.headers.get("x-groq-api-key")
 
-    # Get article titles for this project (used as Pinecone source filter)
+    # Get all source names for this project (articles + documents)
     project_articles = await articles_db.get_articles_by_project(project_id, user_id=user_id)
-    article_titles = [a["title"] for a in project_articles]
+    project_documents = await documents_db.get_documents_by_project(project_id, user_id=user_id)
+    source_names = [a["title"] for a in project_articles] + [d["filename"] for d in project_documents]
 
     # Create per-request LLM if user provided their own key
     if groq_api_key:
@@ -249,26 +250,17 @@ async def project_scoped_query(
             # RAG mode — retrieve and generate
             qe = components["query_engine"]
 
-            # Retrieve with project-scoped filtering
+            # Retrieve with strict project-scoped filtering
             all_chunks = []
-            for title in article_titles:
+            for name in source_names:
                 chunks, _ = qe.retrieve(
                     question=question,
                     top_k=top_k,
                     threshold=threshold,
-                    source_filter=title,
+                    source_filter=name,
                     user_id=user_id_str,
                 )
                 all_chunks.extend(chunks)
-
-            # Also search without source filter but limit to project's content
-            if not all_chunks:
-                all_chunks, _ = qe.retrieve(
-                    question=question,
-                    top_k=top_k,
-                    threshold=threshold,
-                    user_id=user_id_str,
-                )
 
             # Sort by similarity and take top_k
             all_chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)

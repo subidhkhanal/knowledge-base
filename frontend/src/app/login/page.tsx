@@ -61,7 +61,7 @@ export default function LoginPage() {
       }
 
       const data = await resp.json();
-      login(data.access_token, data.username || username.trim());
+      login(data.access_token, data.username || username.trim(), data.refresh_token);
       router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

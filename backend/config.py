@@ -11,7 +11,8 @@ BASE_DIR = Path(__file__).parent.parent
 # JWT Authentication
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-personal-kb-local")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
+JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "15"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
 # PostgreSQL (central DB — user accounts)
 # Get your free connection string at https://supabase.com

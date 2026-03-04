@@ -135,7 +135,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { isLoggedIn, isLoading, username, token, groqApiKey, setGroqKey, tavilyApiKey, setTavilyKey, logout } = useAuth();
+  const { isLoggedIn, isLoading, username, token, refreshToken, groqApiKey, setGroqKey, tavilyApiKey, setTavilyKey, logout } = useAuth();
   const { fontFamily, fontSize, setFontFamily, setFontSize } = useSettings();
 
   const [keyInput, setKeyInput] = useState("");
@@ -256,7 +256,17 @@ export default function SettingsPage() {
               </p>
             </div>
             <button
-              onClick={() => { logout(); router.replace("/login"); }}
+              onClick={async () => {
+                if (refreshToken) {
+                  await fetch(`${API_URL}/api/auth/logout`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ refresh_token: refreshToken }),
+                  }).catch(() => {});
+                }
+                logout();
+                router.replace("/login");
+              }}
               className="rounded-lg px-3 py-1.5 text-xs font-medium cursor-pointer"
               style={{
                 background: "var(--bg-secondary)",

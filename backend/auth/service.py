@@ -1,11 +1,11 @@
 import base64
 import hashlib
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from jose import jwt
 
-from backend.config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
+from backend.config import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 from backend.db.connection import Database
 
 
@@ -33,6 +33,52 @@ class AuthService:
     @staticmethod
     def decode_token(token: str) -> dict:
         return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+
+    @staticmethod
+    def _hash_refresh_token(raw_token: str) -> str:
+        return hashlib.sha256(raw_token.encode()).hexdigest()
+
+    @staticmethod
+    async def create_refresh_token(db: Database, user_id: int) -> str:
+        """Generate a refresh token, store its hash in DB, return the raw token."""
+        raw_token = secrets.token_hex(32)
+        token_hash = AuthService._hash_refresh_token(raw_token)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        await db.execute(
+            "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+            user_id, token_hash, expires_at,
+        )
+        return raw_token
+
+    @staticmethod
+    async def validate_refresh_token(db: Database, raw_token: str) -> int | None:
+        """Validate a refresh token. Returns user_id if valid, None otherwise."""
+        if not raw_token:
+            return None
+        token_hash = AuthService._hash_refresh_token(raw_token)
+        row = await db.fetch_one(
+            "SELECT user_id, expires_at FROM refresh_tokens WHERE token_hash = $1",
+            token_hash,
+        )
+        if not row:
+            return None
+        expires_at = row["expires_at"]
+        # Make expires_at timezone-aware if it isn't
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            # Expired — clean it up
+            await db.execute("DELETE FROM refresh_tokens WHERE token_hash = $1", token_hash)
+            return None
+        return row["user_id"]
+
+    @staticmethod
+    async def revoke_refresh_token(db: Database, raw_token: str) -> None:
+        """Invalidate a refresh token (used on logout)."""
+        if not raw_token:
+            return
+        token_hash = AuthService._hash_refresh_token(raw_token)
+        await db.execute("DELETE FROM refresh_tokens WHERE token_hash = $1", token_hash)
 
     @staticmethod
     async def create_user(db: Database, username: str, password: str) -> int:

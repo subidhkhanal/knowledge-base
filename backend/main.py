@@ -172,7 +172,8 @@ async def register(user: UserCreate):
             user_id=user_id,
         )
         token = AuthService.create_token(user_id, user.username)
-        return {"access_token": token, "token_type": "bearer", "user_id": user_id, "username": user.username}
+        refresh_token = await AuthService.create_refresh_token(db, user_id)
+        return {"access_token": token, "refresh_token": refresh_token, "token_type": "bearer", "user_id": user_id, "username": user.username}
     finally:
         await db.close()
 
@@ -185,7 +186,38 @@ async def login(user: UserLogin):
         if not db_user or not AuthService.verify_password(user.password, db_user["hashed_password"]):
             raise HTTPException(status_code=401, detail="Invalid username or password")
         token = AuthService.create_token(db_user["id"], db_user["username"])
-        return {"access_token": token, "token_type": "bearer", "user_id": db_user["id"], "username": db_user["username"]}
+        refresh_token = await AuthService.create_refresh_token(db, db_user["id"])
+        return {"access_token": token, "refresh_token": refresh_token, "token_type": "bearer", "user_id": db_user["id"], "username": db_user["username"]}
+    finally:
+        await db.close()
+
+
+@app.post("/api/auth/refresh")
+async def refresh_access_token(request: Request):
+    """Issue a new access token using a valid refresh token."""
+    body = await request.json()
+    raw_refresh = body.get("refresh_token", "")
+    db = await get_db()
+    try:
+        user_id = await AuthService.validate_refresh_token(db, raw_refresh)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+        user = await db.fetch_one("SELECT username FROM users WHERE id = $1", user_id)
+        new_token = AuthService.create_token(user_id, user["username"])
+        return {"access_token": new_token, "token_type": "bearer"}
+    finally:
+        await db.close()
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request):
+    """Revoke the refresh token (invalidates the session server-side)."""
+    body = await request.json()
+    raw_refresh = body.get("refresh_token", "")
+    db = await get_db()
+    try:
+        await AuthService.revoke_refresh_token(db, raw_refresh)
+        return {"success": True}
     finally:
         await db.close()
 
