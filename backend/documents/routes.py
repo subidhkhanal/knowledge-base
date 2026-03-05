@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
 from typing import Optional
 
-from backend.auth import get_optional_user
+from backend.auth import get_current_user
 from backend.documents import database as db
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -13,10 +13,10 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 @router.get("/{doc_id}")
 async def get_document_metadata(
     doc_id: int,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get document metadata."""
-    user_id = current_user["user_id"] if current_user else None
+    user_id = current_user["user_id"]
     document = await db.get_document_by_id(doc_id, user_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -34,10 +34,10 @@ async def get_document_metadata(
 @router.get("/{doc_id}/file")
 async def serve_document_file(
     doc_id: int,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Serve the original uploaded file by document ID."""
-    user_id = current_user["user_id"] if current_user else None
+    user_id = current_user["user_id"]
     document = await db.get_document_by_id(doc_id, user_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")

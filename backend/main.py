@@ -22,7 +22,7 @@ from backend.config import (
     CHUNKING_METHOD, USE_HYBRID_RETRIEVAL, UPLOADS_DIR
 )
 from backend.routing import QueryRouter, RouteHandlers
-from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_user, get_optional_user
+from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_user
 from backend.auth.database import init_db, get_db
 from backend.db.connection import close_pools, get_central_db
 from backend.projects.database import insert_project as _create_default_project
@@ -429,7 +429,7 @@ SUPPORTED_EXTENSIONS = {
 async def upload_document(
     file: UploadFile = File(...),
     project_id: Optional[int] = Form(None),
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Upload and process any supported document type."""
     filename = file.filename.lower()
@@ -496,7 +496,7 @@ async def upload_document(
 
     # Store in vector database
     try:
-        user_id_str = str(current_user["user_id"]) if current_user else None
+        user_id_str = str(current_user["user_id"])
         doc_ids = components["vector_store"].add_documents(chunks, user_id=user_id_str)
     except Exception as e:
         error_msg = str(e).lower()
@@ -544,7 +544,7 @@ async def upload_document(
     upload_to_supabase(storage_key, content, mime_type)
     storage_path = storage_key  # store the Supabase key instead of a local path
 
-    user_id_int = current_user["user_id"] if current_user else None
+    user_id_int = current_user["user_id"]
     doc_id = await insert_document(
         filename=file.filename,
         storage_path=storage_path,
@@ -566,7 +566,7 @@ async def upload_document(
 @app.post("/api/upload/text", response_model=UploadResponse)
 async def upload_text(
     request: TextUploadRequest,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Upload direct text content."""
     if not request.content.strip():
@@ -601,7 +601,7 @@ async def upload_text(
 
     # Store in vector database
     try:
-        user_id_str = str(current_user["user_id"]) if current_user else None
+        user_id_str = str(current_user["user_id"])
         doc_ids = components["vector_store"].add_documents(chunks, user_id=user_id_str)
     except Exception as e:
         error_msg = str(e).lower()
@@ -638,15 +638,15 @@ async def upload_text(
 async def query(
     request: QueryRequest,
     http_request: Request,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Query the knowledge base with streaming SSE response."""
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     components = get_components()
-    user_id_str = str(current_user["user_id"]) if current_user else None
-    user_id_int = current_user["user_id"] if current_user else None
+    user_id_str = str(current_user["user_id"])
+    user_id_int = current_user["user_id"]
     groq_api_key = http_request.headers.get("x-groq-api-key")
 
     # Load chat history from conversation if conversation_id is provided
@@ -786,10 +786,10 @@ async def delete_conversation(conv_id: int, current_user: dict = Depends(get_cur
 
 
 @app.get("/api/sources", response_model=List[SourceResponse])
-async def get_sources(current_user: dict = Depends(get_optional_user)):
+async def get_sources(current_user: dict = Depends(get_current_user)):
     """Get all ingested sources for the current user."""
     components = get_components()
-    user_id_str = str(current_user["user_id"]) if current_user else None
+    user_id_str = str(current_user["user_id"])
     sources = components["vector_store"].get_all_sources(user_id=user_id_str)
     return [SourceResponse(**s) for s in sources]
 
@@ -797,11 +797,11 @@ async def get_sources(current_user: dict = Depends(get_optional_user)):
 @app.get("/api/sources/{source_name}/content")
 async def get_source_content(
     source_name: str,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get all chunks/content for a specific source document."""
     components = get_components()
-    user_id_str = str(current_user["user_id"]) if current_user else None
+    user_id_str = str(current_user["user_id"])
     chunks = components["vector_store"].get_chunks_by_source(source_name, user_id=user_id_str)
 
     if not chunks:
@@ -817,11 +817,11 @@ async def get_source_content(
 @app.delete("/api/sources/{source_name}")
 async def delete_source(
     source_name: str,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Delete all documents from a specific source."""
     components = get_components()
-    user_id_str = str(current_user["user_id"]) if current_user else None
+    user_id_str = str(current_user["user_id"])
     deleted = components["vector_store"].delete_by_source(source_name, user_id=user_id_str)
 
     if deleted == 0:
@@ -837,12 +837,12 @@ async def delete_source(
 @app.delete("/api/documents/{doc_id}")
 async def delete_document(
     doc_id: int,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Delete a document: DB record, Pinecone vectors, and file on disk."""
     from backend.documents import database as documents_db
 
-    user_id = current_user["user_id"] if current_user else None
+    user_id = current_user["user_id"]
     doc = await documents_db.delete_document(doc_id, user_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -876,7 +876,7 @@ async def delete_document(
 async def get_chunk_context(
     chunk_id: str,
     context_size: int = 1,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get a specific chunk with surrounding context."""
     components = get_components()
@@ -892,7 +892,7 @@ async def get_chunk_context(
 
 
 @app.get("/api/stats")
-async def get_stats(current_user: dict = Depends(get_optional_user)):
+async def get_stats(current_user: dict = Depends(get_current_user)):
     """Get knowledge base statistics."""
     components = get_components()
     sources = components["vector_store"].get_all_sources()

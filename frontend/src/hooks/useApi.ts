@@ -1,27 +1,28 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// Module-level singleton — shared across ALL useApi() instances.
+// Prevents race conditions where concurrent 401s each trigger independent refresh calls.
+let _isRefreshing = false;
+let _refreshPromise: Promise<string | null> | null = null;
+
 export function useApi() {
   const { token, refreshToken, groqApiKey, tavilyApiKey, updateToken, logout } = useAuth();
 
-  // Prevent multiple concurrent refresh attempts
-  const isRefreshing = useRef(false);
-  const refreshPromise = useRef<Promise<string | null> | null>(null);
-
   const tryRefresh = useCallback(async (): Promise<string | null> => {
-    if (isRefreshing.current) {
-      return refreshPromise.current;
+    if (_isRefreshing) {
+      return _refreshPromise;
     }
     if (!refreshToken) {
       logout();
       return null;
     }
-    isRefreshing.current = true;
-    refreshPromise.current = (async () => {
+    _isRefreshing = true;
+    _refreshPromise = (async () => {
       try {
         const res = await fetch(`${API_URL}/api/auth/refresh`, {
           method: "POST",
@@ -39,11 +40,11 @@ export function useApi() {
         logout();
         return null;
       } finally {
-        isRefreshing.current = false;
-        refreshPromise.current = null;
+        _isRefreshing = false;
+        _refreshPromise = null;
       }
     })();
-    return refreshPromise.current;
+    return _refreshPromise;
   }, [refreshToken, updateToken, logout]);
 
   const apiFetch = useCallback(
@@ -63,8 +64,7 @@ export function useApi() {
 
       if (response.status === 401) {
         const newToken = await tryRefresh();
-        if (!newToken) return response; // logout already called
-        // Retry with new token
+        if (!newToken) return response;
         return fetch(`${API_URL}${endpoint}`, {
           ...options,
           headers: buildHeaders(newToken),
@@ -89,8 +89,5 @@ export function useApi() {
     [token, groqApiKey, tavilyApiKey]
   );
 
-  return {
-    apiFetch,
-    createXhr,
-  };
+  return { apiFetch, createXhr };
 }

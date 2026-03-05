@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 
-from backend.auth import get_current_user, get_optional_user
+from backend.auth import get_current_user
 from backend.articles.models import PublishRequest, PublishResponse
 from backend.articles import database as db
 from backend.articles.publisher import publish_article, delete_article_vectors
@@ -90,9 +90,9 @@ async def publish_conversation(
 
 
 @router.get("/articles")
-async def list_articles(current_user: dict = Depends(get_optional_user)):
+async def list_articles(current_user: dict = Depends(get_current_user)):
     """List all published articles."""
-    user_id = current_user["user_id"] if current_user else None
+    user_id = current_user["user_id"]
     articles = await db.get_all_articles(user_id=user_id)
     return {"articles": articles}
 
@@ -100,10 +100,10 @@ async def list_articles(current_user: dict = Depends(get_optional_user)):
 @router.get("/articles/{slug}")
 async def get_article_detail(
     slug: str,
-    current_user: dict = Depends(get_optional_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get a single article with full content."""
-    user_id = current_user["user_id"] if current_user else None
+    user_id = current_user["user_id"]
     article = await db.get_article_by_slug(slug, user_id=user_id)
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
