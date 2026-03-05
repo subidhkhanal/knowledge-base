@@ -735,8 +735,6 @@ async def query(
             await ConversationService.add_message(
                 request.conversation_id, "assistant", full_answer, final_sources, user_id=user_id_int
             )
-        print(f"[query] stream complete in {_time.time()-_t0:.2f}s", flush=True)
-
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
