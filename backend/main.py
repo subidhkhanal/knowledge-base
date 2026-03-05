@@ -671,8 +671,6 @@ async def query(
         user_route_handlers = None
 
     async def event_stream():
-        import time as _time
-        _t0 = _time.time()
         # Send immediately so HTTP response starts right away
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
 
@@ -681,11 +679,9 @@ async def query(
 
         # Select route handlers: per-request (BYOK) or default singleton
         active_route_handlers = user_route_handlers or components.get("route_handlers")
-        print(f"[query] stream started | mode={request.mode} | groq_key={'yes' if groq_api_key else 'no'} | has_user_rh={user_route_handlers is not None} | has_system_rh={components.get('route_handlers') is not None} | active_rh={active_route_handlers is not None}", flush=True)
 
         if request.mode == "llm":
             # Direct LLM mode — no retrieval
-            print(f"[query] LLM mode — calling _call_llm_stream", flush=True)
             system_prompt = "You are a helpful assistant. Answer the user's question directly and concisely."
             rh = active_route_handlers
             if rh:
@@ -693,27 +689,19 @@ async def query(
                     for token in rh._call_llm_stream(system_prompt, request.question):
                         accumulated_answer.append(token)
                         yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-                except Exception as e:
-                    print(f"[query] LLM mode error: {e}", flush=True)
+                except Exception:
                     yield f"data: {json.dumps({'type': 'token', 'content': 'Unable to generate a response. Please check your API keys.'})}\n\n"
             else:
-                print(f"[query] LLM mode — no route handlers available", flush=True)
                 yield f"data: {json.dumps({'type': 'token', 'content': 'LLM not available. Please check your API keys.'})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'groq'})}\n\n"
-            print(f"[query] LLM mode done in {_time.time()-_t0:.2f}s", flush=True)
 
         # Use query routing if enabled (RAG mode)
         elif ENABLE_QUERY_ROUTING and components["query_router"] is not None and active_route_handlers is not None:
-            print(f"[query] RAG+routing mode — classifying...", flush=True)
-            _tc = _time.time()
             route_result = await components["query_router"].classify(
                 request.question,
                 chat_history=chat_history
             )
-            print(f"[query] classified as {route_result.route_type} in {_time.time()-_tc:.2f}s (reason: {route_result.reasoning})", flush=True)
 
-            print(f"[query] starting handle_stream...", flush=True)
-            _event_count = 0
             try:
                 async for event in active_route_handlers.handle_stream(
                     route_type=route_result.route_type,
@@ -724,20 +712,16 @@ async def query(
                     rewritten_query=route_result.rewritten_query,
                     user_id=user_id_str
                 ):
-                    _event_count += 1
                     if event.get("type") == "token":
                         accumulated_answer.append(event.get("content", ""))
                     elif event.get("type") == "done":
                         final_sources = event.get("sources", [])
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception as e:
-                print(f"[query] handle_stream error: {e}", flush=True)
                 yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
-            print(f"[query] handle_stream done — {_event_count} events in {_time.time()-_t0:.2f}s", flush=True)
         else:
             # Fallback: stream via query engine LLM
-            print(f"[query] fallback mode — retrieving chunks...", flush=True)
             qe = components["query_engine"]
             chunks, reranked = qe.retrieve(
                 question=request.question,
@@ -746,10 +730,8 @@ async def query(
                 source_filter=request.source_filter,
                 user_id=user_id_str
             )
-            print(f"[query] retrieved {len(chunks)} chunks", flush=True)
             # Use per-request LLM if available, otherwise default
             active_llm = user_llm or qe.llm
-            print(f"[query] starting LLM stream (groq_client={'yes' if active_llm.groq_client else 'no'})...", flush=True)
             try:
                 async for event in active_llm.generate_response_stream(
                     query=request.question,
@@ -761,10 +743,8 @@ async def query(
                         final_sources = event.get("sources", [])
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception as e:
-                print(f"[query] fallback LLM error: {e}", flush=True)
                 yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
-            print(f"[query] fallback done in {_time.time()-_t0:.2f}s", flush=True)
 
         # Save assistant response to conversation if conversation_id provided
         if request.conversation_id and user_id_int:
