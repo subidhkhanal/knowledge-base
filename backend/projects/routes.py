@@ -252,11 +252,15 @@ async def project_scoped_query(
             chunks = all_chunks[:top_k]
 
             llm = active_llm or qe.llm
-            async for event in llm.generate_response_stream(
-                query=question,
-                chunks=chunks,
-            ):
-                yield f"data: {json.dumps(event)}\n\n"
+            try:
+                async for event in llm.generate_response_stream(
+                    query=question,
+                    chunks=chunks,
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
 
     return StreamingResponse(
         event_stream(),

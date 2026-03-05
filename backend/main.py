@@ -702,20 +702,24 @@ async def query(
                 chat_history=chat_history
             )
 
-            async for event in active_route_handlers.handle_stream(
-                route_type=route_result.route_type,
-                query=request.question,
-                top_k=request.top_k,
-                threshold=request.threshold,
-                source_filter=request.source_filter,
-                rewritten_query=route_result.rewritten_query,
-                user_id=user_id_str
-            ):
-                if event.get("type") == "token":
-                    accumulated_answer.append(event.get("content", ""))
-                elif event.get("type") == "done":
-                    final_sources = event.get("sources", [])
-                yield f"data: {json.dumps(event)}\n\n"
+            try:
+                async for event in active_route_handlers.handle_stream(
+                    route_type=route_result.route_type,
+                    query=request.question,
+                    top_k=request.top_k,
+                    threshold=request.threshold,
+                    source_filter=request.source_filter,
+                    rewritten_query=route_result.rewritten_query,
+                    user_id=user_id_str
+                ):
+                    if event.get("type") == "token":
+                        accumulated_answer.append(event.get("content", ""))
+                    elif event.get("type") == "done":
+                        final_sources = event.get("sources", [])
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
         else:
             # Fallback: stream via query engine LLM
             qe = components["query_engine"]
@@ -728,15 +732,19 @@ async def query(
             )
             # Use per-request LLM if available, otherwise default
             active_llm = user_llm or qe.llm
-            async for event in active_llm.generate_response_stream(
-                query=request.question,
-                chunks=chunks
-            ):
-                if event.get("type") == "token":
-                    accumulated_answer.append(event.get("content", ""))
-                elif event.get("type") == "done":
-                    final_sources = event.get("sources", [])
-                yield f"data: {json.dumps(event)}\n\n"
+            try:
+                async for event in active_llm.generate_response_stream(
+                    query=request.question,
+                    chunks=chunks
+                ):
+                    if event.get("type") == "token":
+                        accumulated_answer.append(event.get("content", ""))
+                    elif event.get("type") == "done":
+                        final_sources = event.get("sources", [])
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
 
         # Save assistant response to conversation if conversation_id provided
         if request.conversation_id and user_id_int:
