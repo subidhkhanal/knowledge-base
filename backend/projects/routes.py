@@ -244,7 +244,6 @@ async def project_scoped_query(
                     top_k=top_k,
                     threshold=threshold,
                     source_filter=name,
-                    user_id=user_id_str,
                 )
                 all_chunks.extend(chunks)
 
