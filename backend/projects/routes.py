@@ -198,83 +198,51 @@ async def project_scoped_query(
 
     project_id = project["id"]
     components = _get_components()
-    user_id_str = str(user_id)
-    groq_api_key = http_request.headers.get("x-groq-api-key")
 
     project_articles = await articles_db.get_articles_by_project(project_id, user_id=user_id)
     project_documents = await documents_db.get_documents_by_project(project_id, user_id=user_id)
     source_names = [a["title"] for a in project_articles] + [d["filename"] for d in project_documents]
 
-    if groq_api_key:
-        from backend.llm.reasoning import LLMReasoning
-        active_llm = LLMReasoning(groq_api_key=groq_api_key)
-    else:
-        active_llm = None
-
     async def event_stream():
-        import time as _time
-        _t0 = _time.time()
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
-        print(f"[project-query] stream started | project={slug} | mode={mode} | sources={source_names} | groq_key={'yes' if groq_api_key else 'no'}", flush=True)
 
         if mode == "llm":
             system_prompt = "You are a helpful assistant. Answer the user's question directly and concisely."
-            route_handlers = components.get("route_handlers")
-            if groq_api_key:
-                from backend.routing import RouteHandlers
-                rh = RouteHandlers(groq_api_key=groq_api_key)
-            elif route_handlers:
-                rh = route_handlers
-            else:
-                rh = None
-
-            print(f"[project-query] LLM mode — rh={rh is not None}, groq_client={rh.groq_client is not None if rh else 'N/A'}", flush=True)
+            rh = components.get("route_handlers")
             if rh:
                 try:
                     for token in rh._call_llm_stream(system_prompt, question):
                         yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-                except Exception as e:
-                    print(f"[project-query] LLM error: {e}", flush=True)
-                    yield f"data: {json.dumps({'type': 'token', 'content': 'Unable to generate a response. Please check your API keys.'})}\n\n"
+                except Exception:
+                    yield f"data: {json.dumps({'type': 'token', 'content': 'Unable to generate a response.'})}\n\n"
             else:
-                yield f"data: {json.dumps({'type': 'token', 'content': 'LLM not available. Please check your API keys.'})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'content': 'LLM not available. Please configure GROQ_API_KEY.'})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'groq'})}\n\n"
-            print(f"[project-query] LLM mode done in {_time.time()-_t0:.2f}s", flush=True)
         else:
             qe = components["query_engine"]
-            print(f"[project-query] RAG mode — retrieving from {len(source_names)} sources...", flush=True)
 
             all_chunks = []
             for name in source_names:
-                _tr = _time.time()
                 chunks, _ = qe.retrieve(
                     question=question,
                     top_k=top_k,
                     threshold=threshold,
                     source_filter=name,
                 )
-                print(f"[project-query]   source='{name}' → {len(chunks)} chunks in {_time.time()-_tr:.2f}s", flush=True)
                 all_chunks.extend(chunks)
 
             all_chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
             chunks = all_chunks[:top_k]
-            print(f"[project-query] total chunks after sort/limit: {len(chunks)}", flush=True)
 
-            llm = active_llm or qe.llm
-            print(f"[project-query] starting LLM stream (groq_client={'yes' if llm.groq_client else 'no'})...", flush=True)
-            _event_count = 0
             try:
-                async for event in llm.generate_response_stream(
+                async for event in qe.llm.generate_response_stream(
                     query=question,
                     chunks=chunks,
                 ):
-                    _event_count += 1
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception as e:
-                print(f"[project-query] LLM error: {e}", flush=True)
                 yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
-            print(f"[project-query] done — {_event_count} events in {_time.time()-_t0:.2f}s", flush=True)
 
     return StreamingResponse(
         event_stream(),

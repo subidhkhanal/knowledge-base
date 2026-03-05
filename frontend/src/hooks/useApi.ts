@@ -11,7 +11,7 @@ let _isRefreshing = false;
 let _refreshPromise: Promise<string | null> | null = null;
 
 export function useApi() {
-  const { token, refreshToken, groqApiKey, tavilyApiKey, updateToken, logout } = useAuth();
+  const { token, refreshToken, updateToken, logout } = useAuth();
 
   const tryRefresh = useCallback(async (): Promise<string | null> => {
     if (_isRefreshing) {
@@ -52,8 +52,6 @@ export function useApi() {
       const buildHeaders = (currentToken: string | null) => {
         const headers = new Headers(options.headers);
         if (currentToken) headers.set("Authorization", `Bearer ${currentToken}`);
-        if (groqApiKey) headers.set("X-Groq-API-Key", groqApiKey);
-        if (tavilyApiKey) headers.set("X-Tavily-API-Key", tavilyApiKey);
         return headers;
       };
 
@@ -73,7 +71,7 @@ export function useApi() {
 
       return response;
     },
-    [token, groqApiKey, tavilyApiKey, tryRefresh]
+    [token, tryRefresh]
   );
 
   // Create XMLHttpRequest (for upload progress tracking)
@@ -82,11 +80,9 @@ export function useApi() {
       const xhr = new XMLHttpRequest();
       xhr.open(method, `${API_URL}${endpoint}`);
       if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      if (groqApiKey) xhr.setRequestHeader("X-Groq-API-Key", groqApiKey);
-      if (tavilyApiKey) xhr.setRequestHeader("X-Tavily-API-Key", tavilyApiKey);
       return xhr;
     },
-    [token, groqApiKey, tavilyApiKey]
+    [token]
   );
 
   return { apiFetch, createXhr };

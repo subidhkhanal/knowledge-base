@@ -647,7 +647,6 @@ async def query(
     components = get_components()
     user_id_str = str(current_user["user_id"])
     user_id_int = current_user["user_id"]
-    groq_api_key = http_request.headers.get("x-groq-api-key")
 
     # Load chat history from conversation if conversation_id is provided
     chat_history = request.chat_history
@@ -657,19 +656,6 @@ async def query(
         chat_history = await ConversationService.get_recent_history(request.conversation_id, user_id=user_id_int)
         await ConversationService.add_message(request.conversation_id, "user", request.question, user_id=user_id_int)
 
-    # Create per-request LLM instances if user provided their own Groq key
-    if groq_api_key:
-        from backend.llm.reasoning import LLMReasoning
-        user_llm = LLMReasoning(groq_api_key=groq_api_key)
-        user_route_handlers = RouteHandlers(
-            vector_store=components["vector_store"],
-            query_engine=components["query_engine"],
-            groq_api_key=groq_api_key,
-        )
-    else:
-        user_llm = None
-        user_route_handlers = None
-
     async def event_stream():
         # Send immediately so HTTP response starts right away
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
@@ -677,13 +663,12 @@ async def query(
         accumulated_answer = []
         final_sources = []
 
-        # Select route handlers: per-request (BYOK) or default singleton
-        active_route_handlers = user_route_handlers or components.get("route_handlers")
+        route_handlers = components.get("route_handlers")
 
         if request.mode == "llm":
             # Direct LLM mode — no retrieval
             system_prompt = "You are a helpful assistant. Answer the user's question directly and concisely."
-            rh = active_route_handlers
+            rh = route_handlers
             if rh:
                 try:
                     for token in rh._call_llm_stream(system_prompt, request.question):
@@ -696,14 +681,14 @@ async def query(
             yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'groq'})}\n\n"
 
         # Use query routing if enabled (RAG mode)
-        elif ENABLE_QUERY_ROUTING and components["query_router"] is not None and active_route_handlers is not None:
+        elif ENABLE_QUERY_ROUTING and components["query_router"] is not None and route_handlers is not None:
             route_result = await components["query_router"].classify(
                 request.question,
                 chat_history=chat_history
             )
 
             try:
-                async for event in active_route_handlers.handle_stream(
+                async for event in route_handlers.handle_stream(
                     route_type=route_result.route_type,
                     query=request.question,
                     top_k=request.top_k,
@@ -730,10 +715,8 @@ async def query(
                 source_filter=request.source_filter,
                 user_id=user_id_str
             )
-            # Use per-request LLM if available, otherwise default
-            active_llm = user_llm or qe.llm
             try:
-                async for event in active_llm.generate_response_stream(
+                async for event in qe.llm.generate_response_stream(
                     query=request.question,
                     chunks=chunks
                 ):
