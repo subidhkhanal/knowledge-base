@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "@/contexts/AuthContext";
 import { useApi } from "@/hooks/useApi";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { ChatArea } from "./ChatArea";
@@ -12,7 +11,7 @@ import type { ChatMode, ResearchQuality } from "./ChatInput";
 import { Sidebar } from "./Sidebar";
 import type { Source } from "@/types/chat";
 
-const HIDDEN_PATHS = ["/login", "/settings"];
+const HIDDEN_PATHS = ["/settings"];
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 320;
 const WIDGET_STORAGE_KEY = "kb_widget_conversations";
@@ -50,7 +49,6 @@ function getPillPlaceholder(pathname: string): string {
 
 export function ChatWidget() {
   const pathname = usePathname();
-  const { isLoggedIn, isLoading: authLoading } = useAuth();
   const { apiFetch } = useApi();
 
   const {
@@ -80,8 +78,7 @@ export function ChatWidget() {
   const prevSlugRef = useRef<string | null>(null);
 
   const slug = getSlugFromPath(pathname);
-  const isHidden =
-    HIDDEN_PATHS.includes(pathname) || authLoading || !isLoggedIn;
+  const isHidden = HIDDEN_PATHS.includes(pathname);
 
   // Reset when navigating to a different project
   useEffect(() => {

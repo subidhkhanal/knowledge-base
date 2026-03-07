@@ -147,6 +147,20 @@ _a2a_app.add_routes_to_app(
 async def startup():
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     await init_db()
+    # Ensure demo user exists for portfolio demo mode
+    db = await get_db()
+    try:
+        existing = await db.fetch_one("SELECT id FROM users WHERE id = 1")
+        if not existing:
+            user_id = await AuthService.create_user(db, "demo", "demo")
+            await _create_default_project(
+                slug="uncategorized",
+                title="Uncategorized",
+                description="Default project for unsorted articles and documents",
+                user_id=user_id,
+            )
+    finally:
+        await db.close()
 
 
 @app.on_event("shutdown")

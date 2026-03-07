@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "@/contexts/AuthContext";
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -9,8 +8,6 @@ interface HeaderProps {
 }
 
 export function Header({ onToggleSidebar, onUploadClick }: HeaderProps) {
-  const { isLoggedIn, username, logout } = useAuth();
-
   return (
     <header
       className="sticky top-0 z-40"
@@ -51,7 +48,7 @@ export function Header({ onToggleSidebar, onUploadClick }: HeaderProps) {
           </Link>
         </div>
 
-        {/* Right: Nav + Upload */}
+        {/* Right: Upload */}
         <div className="flex items-center gap-1">
           {onUploadClick && (
             <button
@@ -66,25 +63,13 @@ export function Header({ onToggleSidebar, onUploadClick }: HeaderProps) {
               <span className="hidden lg:inline">Upload</span>
             </button>
           )}
-          {isLoggedIn ? (
-            <div className="flex items-center ml-2 pl-2" style={{ borderLeft: "1px solid var(--border)" }}>
-              <Link
-                href="/settings"
-                className="text-xs font-medium hover:underline"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                {username}
-              </Link>
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              className="ml-2 rounded-lg px-3 py-1.5 text-xs font-medium text-white"
-              style={{ background: "var(--accent)" }}
-            >
-              Login
-            </Link>
-          )}
+          <Link
+            href="/settings"
+            className="ml-2 rounded-lg px-3 py-1.5 text-xs font-medium"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Settings
+          </Link>
         </div>
       </div>
     </header>
