@@ -121,6 +121,11 @@ async def delete_project(slug: str, user_id: int) -> Optional[int]:
             "UPDATE articles SET project_id = NULL WHERE project_id = $1 AND user_id = $2",
             project_id, user_id,
         )
+        # Delete documents belonging to this project
+        await db.execute(
+            "DELETE FROM documents WHERE project_id = $1 AND user_id = $2",
+            project_id, user_id,
+        )
         # Delete the project
         await db.execute("DELETE FROM projects WHERE id = $1 AND user_id = $2", project_id, user_id)
         return project_id
