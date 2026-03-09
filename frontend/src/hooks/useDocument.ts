@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useApi } from "./useApi";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 export interface DocumentMeta {
   id: number;
@@ -14,34 +14,14 @@ export interface DocumentMeta {
 }
 
 export function useDocument(id: number) {
-  const { apiFetch } = useApi();
-  const [document, setDocument] = useState<DocumentMeta | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading } = useSWR<DocumentMeta>(
+    `/api/documents/${id}`,
+    fetcher,
+  );
 
-  const fetchDocument = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch(`/api/documents/${id}`);
-      if (res.ok) {
-        setDocument(await res.json());
-      } else if (res.status === 404) {
-        setError("Document not found");
-      } else {
-        const data = await res.json().catch(() => null);
-        setError(data?.detail || "Failed to load document");
-      }
-    } catch {
-      setError("Failed to connect to the server");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id, apiFetch]);
-
-  useEffect(() => {
-    fetchDocument();
-  }, [fetchDocument]);
-
-  return { document, isLoading, error };
+  return {
+    document: data ?? null,
+    isLoading,
+    error: error ? "Failed to connect to the server" : null,
+  };
 }

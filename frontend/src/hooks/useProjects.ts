@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import useSWR, { mutate } from "swr";
 import { useApi } from "./useApi";
+import { fetcher } from "@/lib/fetcher";
 
 export function useDeleteProject() {
   const { apiFetch } = useApi();
@@ -15,6 +17,7 @@ export function useDeleteProject() {
           method: "DELETE",
         });
         if (res.ok) {
+          await mutate("/api/projects");
           return await res.json();
         }
         const data = await res.json();
@@ -60,71 +63,31 @@ export interface ProjectDetail extends ProjectListItem {
 }
 
 export function useProjects() {
-  const { apiFetch } = useApi();
-  const [projects, setProjects] = useState<ProjectListItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading, mutate: refetch } = useSWR<{ projects: ProjectListItem[] }>(
+    "/api/projects",
+    fetcher,
+  );
 
-  const fetchProjects = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const res = await apiFetch("/api/projects");
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(data.projects || []);
-      } else {
-        const data = await res.json().catch(() => null);
-        setError(data?.detail || "Failed to load projects");
-      }
-    } catch {
-      setError("Failed to connect to the server");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [apiFetch]);
-
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
-
-  return { projects, isLoading, error, refetch: fetchProjects };
+  return {
+    projects: data?.projects ?? [],
+    isLoading,
+    error: error ? "Failed to connect to the server" : null,
+    refetch,
+  };
 }
 
 export function useProject(slug: string) {
-  const { apiFetch } = useApi();
-  const [project, setProject] = useState<ProjectDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading, mutate: refetch } = useSWR<ProjectDetail>(
+    `/api/projects/${encodeURIComponent(slug)}`,
+    fetcher,
+  );
 
-  const fetchProject = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const res = await apiFetch(`/api/projects/${encodeURIComponent(slug)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setProject(data);
-      } else if (res.status === 404) {
-        setError("Project not found");
-      } else {
-        const data = await res.json().catch(() => null);
-        setError(data?.detail || "Failed to load project");
-      }
-    } catch {
-      setError("Failed to connect to the server");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [slug, apiFetch]);
-
-  useEffect(() => {
-    fetchProject();
-  }, [fetchProject]);
-
-  return { project, isLoading, error, refetch: fetchProject };
+  return {
+    project: data ?? null,
+    isLoading,
+    error: error ? "Failed to connect to the server" : null,
+    refetch,
+  };
 }
 
 export function useDeleteArticle() {
@@ -139,6 +102,7 @@ export function useDeleteArticle() {
           method: "DELETE",
         });
         if (res.ok) {
+          await mutate((key: string) => typeof key === "string" && key.startsWith("/api/projects/"), undefined, { revalidate: true });
           return await res.json();
         }
         const data = await res.json();
@@ -165,6 +129,7 @@ export function useDeleteDocument() {
           method: "DELETE",
         });
         if (res.ok) {
+          await mutate((key: string) => typeof key === "string" && key.startsWith("/api/projects/"), undefined, { revalidate: true });
           return await res.json();
         }
         const data = await res.json();
@@ -193,6 +158,7 @@ export function useCreateProject() {
           body: JSON.stringify({ title, description }),
         });
         if (res.ok) {
+          await mutate("/api/projects");
           return await res.json();
         }
         const data = await res.json();
