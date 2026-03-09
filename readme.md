@@ -45,10 +45,6 @@ Chrome Extension ──► Frontend (Next.js) ──► Backend (FastAPI) ──
 - Extract web articles using **Readability.js**
 - One-click publish to your knowledge base
 
-### Interoperability
-- **MCP Server** — Model Context Protocol for tool-use integration
-- **A2A Protocol** — Agent-to-Agent JSON-RPC with three skills: deep-research, knowledge-search, rag-qa
-
 ### Evaluation
 - **RAGAS** framework for retrieval quality metrics
 - Gemini 2.5 Flash as evaluation judge
@@ -122,13 +118,6 @@ Chrome Extension ──► Frontend (Next.js) ──► Backend (FastAPI) ──
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/research/stream` | Start deep research (SSE streaming) |
-
-### Interoperability
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| — | `/mcp` | MCP Server (Model Context Protocol) |
-| GET | `/.well-known/agent-card.json` | A2A Agent Card |
-| POST | `/a2a` | A2A JSON-RPC handler |
 
 ## Local Development
 
@@ -211,8 +200,6 @@ personal-assistant/
 │   ├── storage/              # Pinecone vector store, Supabase storage
 │   ├── llm/                  # Groq LLM integration
 │   ├── evaluation/           # RAGAS evaluation framework
-│   ├── mcp/                  # MCP Server
-│   ├── a2a/                  # A2A Protocol
 │   └── db/                   # Database connection pooling
 ├── frontend/
 │   └── src/

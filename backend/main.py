@@ -31,9 +31,6 @@ from backend.articles import articles_router
 from backend.projects import projects_router
 from backend.documents import documents_router
 from backend.research import research_router
-from backend.mcp_server import mcp as mcp_server
-from backend.a2a.agent_card import build_agent_card
-from backend.a2a.executor import PKBAgentExecutor
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -64,83 +61,6 @@ app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(research_router)
 
-# Mount MCP server (Streamable HTTP transport at /mcp)
-# Wrap with middleware that validates ?token= query param and sets user context.
-# This avoids FastMCP's built-in OAuth (which Claude.ai can't use without a full
-# OAuth authorization server) while still providing per-user data isolation.
-_mcp_app = mcp_server.streamable_http_app()
-
-
-class _MCPQueryTokenMiddleware:
-    """ASGI middleware: validates ?token=xxx, looks up user, sets contextvar."""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            qs = scope.get("query_string", b"").decode()
-            if "token=" in qs:
-                from urllib.parse import parse_qs
-                params = parse_qs(qs)
-                token = params.get("token", [None])[0]
-                if token:
-                    # Look up token in central DB
-                    db = await get_central_db()
-                    try:
-                        row = await db.fetch_one(
-                            "SELECT id FROM users WHERE mcp_token = $1", token
-                        )
-                    finally:
-                        await db.close()
-
-                    if row:
-                        from backend.mcp_server import mcp_user_id_var
-                        ctx_token = mcp_user_id_var.set(str(row["id"]))
-                        try:
-                            await self.app(scope, receive, send)
-                        finally:
-                            mcp_user_id_var.reset(ctx_token)
-                        return
-                    else:
-                        # Invalid token — return 401
-                        response_body = b'{"error": "Invalid MCP token"}'
-                        await send({
-                            "type": "http.response.start",
-                            "status": 401,
-                            "headers": [
-                                (b"content-type", b"application/json"),
-                                (b"content-length", str(len(response_body)).encode()),
-                            ],
-                        })
-                        await send({
-                            "type": "http.response.body",
-                            "body": response_body,
-                        })
-                        return
-
-        # No token param — fall through (uses MCP_USER_ID env var)
-        await self.app(scope, receive, send)
-
-
-app.mount("/mcp", _MCPQueryTokenMiddleware(_mcp_app))
-
-# Mount A2A protocol (Agent Card + JSON-RPC task handling)
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import InMemoryTaskStore
-from a2a.server.apps import A2AStarletteApplication
-
-_a2a_card = build_agent_card()
-_a2a_handler = DefaultRequestHandler(
-    agent_executor=PKBAgentExecutor(),
-    task_store=InMemoryTaskStore(),
-)
-_a2a_app = A2AStarletteApplication(agent_card=_a2a_card, http_handler=_a2a_handler)
-_a2a_app.add_routes_to_app(
-    app,
-    agent_card_url="/.well-known/agent-card.json",
-    rpc_url="/a2a",
-)
 
 
 @app.on_event("startup")
@@ -236,51 +156,6 @@ async def logout(request: Request):
         await db.close()
 
 
-# --- MCP token endpoints (require JWT auth) ---
-
-@app.post("/api/auth/mcp-token")
-async def generate_mcp_token(current_user: dict = Depends(get_current_user)):
-    """Generate or regenerate an MCP access token for the current user."""
-    import secrets
-    token = secrets.token_hex(32)
-    db = await get_db()
-    try:
-        await db.execute(
-            "UPDATE users SET mcp_token = $1 WHERE id = $2",
-            token, current_user["user_id"],
-        )
-        return {"mcp_token": token}
-    finally:
-        await db.close()
-
-
-@app.delete("/api/auth/mcp-token")
-async def revoke_mcp_token(current_user: dict = Depends(get_current_user)):
-    """Revoke the MCP access token."""
-    db = await get_db()
-    try:
-        await db.execute(
-            "UPDATE users SET mcp_token = NULL WHERE id = $1",
-            current_user["user_id"],
-        )
-        return {"message": "MCP token revoked"}
-    finally:
-        await db.close()
-
-
-@app.get("/api/auth/mcp-token/status")
-async def get_mcp_token_status(current_user: dict = Depends(get_current_user)):
-    """Check if user has an MCP token (without revealing it)."""
-    db = await get_db()
-    try:
-        row = await db.fetch_one(
-            "SELECT mcp_token FROM users WHERE id = $1",
-            current_user["user_id"],
-        )
-        has_token = row is not None and row["mcp_token"] is not None
-        return {"has_token": has_token}
-    finally:
-        await db.close()
 
 
 # Lazy-load heavy components to speed up startup

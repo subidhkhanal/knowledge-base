@@ -5,10 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     hashed_password TEXT NOT NULL,
-    mcp_token TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_users_mcp_token ON users(mcp_token);
 
 CREATE TABLE IF NOT EXISTS projects (
     id SERIAL PRIMARY KEY,
