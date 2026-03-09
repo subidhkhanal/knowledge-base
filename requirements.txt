@@ -30,10 +30,8 @@ tiktoken>=0.5.0
 # Embeddings and Re-ranking (Cohere free tier)
 cohere>=5.0.0
 
-# Evaluation (RAGAS + Gemini as judge)
-ragas>=0.2.0
-google-genai>=1.0.0
-datasets>=2.0.0
+# Evaluation (install manually: pip install ragas google-genai datasets)
+# Only needed for running backend/evaluation/eval_runner.py
 
 # Hybrid Retrieval
 rank-bm25>=0.2.2
