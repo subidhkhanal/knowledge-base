@@ -22,7 +22,7 @@ from backend.config import (
     CHUNKING_METHOD, USE_HYBRID_RETRIEVAL, UPLOADS_DIR
 )
 from backend.routing import QueryRouter, RouteHandlers
-from backend.auth import AuthService, UserCreate, UserLogin, Token, get_current_user
+from backend.auth import get_current_user
 from backend.auth.database import init_db, get_db
 from backend.db.connection import close_pools, get_central_db
 from backend.projects.database import insert_project as _create_default_project
@@ -72,12 +72,15 @@ async def startup():
     try:
         existing = await db.fetch_one("SELECT id FROM users WHERE id = 1")
         if not existing:
-            user_id = await AuthService.create_user(db, "demo", "demo")
+            await db.execute(
+                "INSERT INTO users (username, hashed_password) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING",
+                "demo", ""
+            )
             await _create_default_project(
                 slug="uncategorized",
                 title="Uncategorized",
                 description="Default project for unsorted articles and documents",
-                user_id=user_id,
+                user_id=1,
             )
     finally:
         await db.close()
@@ -86,74 +89,6 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await close_pools()
-
-
-# --- Auth endpoints (no auth required) ---
-
-@app.post("/api/auth/register")
-async def register(user: UserCreate):
-    db = await get_db()
-    try:
-        existing = await AuthService.get_user_by_username(db, user.username)
-        if existing:
-            raise HTTPException(status_code=400, detail="Username already taken")
-        user_id = await AuthService.create_user(db, user.username, user.password)
-        # Create default "Uncategorized" project for the new user
-        await _create_default_project(
-            slug="uncategorized",
-            title="Uncategorized",
-            description="Default project for unsorted articles and documents",
-            user_id=user_id,
-        )
-        token = AuthService.create_token(user_id, user.username)
-        refresh_token = await AuthService.create_refresh_token(db, user_id)
-        return {"access_token": token, "refresh_token": refresh_token, "token_type": "bearer", "user_id": user_id, "username": user.username}
-    finally:
-        await db.close()
-
-
-@app.post("/api/auth/login")
-async def login(user: UserLogin):
-    db = await get_db()
-    try:
-        db_user = await AuthService.get_user_by_username(db, user.username)
-        if not db_user or not AuthService.verify_password(user.password, db_user["hashed_password"]):
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-        token = AuthService.create_token(db_user["id"], db_user["username"])
-        refresh_token = await AuthService.create_refresh_token(db, db_user["id"])
-        return {"access_token": token, "refresh_token": refresh_token, "token_type": "bearer", "user_id": db_user["id"], "username": db_user["username"]}
-    finally:
-        await db.close()
-
-
-@app.post("/api/auth/refresh")
-async def refresh_access_token(request: Request):
-    """Issue a new access token using a valid refresh token."""
-    body = await request.json()
-    raw_refresh = body.get("refresh_token", "")
-    db = await get_db()
-    try:
-        user_id = await AuthService.validate_refresh_token(db, raw_refresh)
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
-        user = await db.fetch_one("SELECT username FROM users WHERE id = $1", user_id)
-        new_token = AuthService.create_token(user_id, user["username"])
-        return {"access_token": new_token, "token_type": "bearer"}
-    finally:
-        await db.close()
-
-
-@app.post("/api/auth/logout")
-async def logout(request: Request):
-    """Revoke the refresh token (invalidates the session server-side)."""
-    body = await request.json()
-    raw_refresh = body.get("refresh_token", "")
-    db = await get_db()
-    try:
-        await AuthService.revoke_refresh_token(db, raw_refresh)
-        return {"success": True}
-    finally:
-        await db.close()
 
 
 

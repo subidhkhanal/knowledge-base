@@ -1,18 +1,9 @@
-from fastapi import Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-security = HTTPBearer(auto_error=False)
-
 DEMO_USER = {"user_id": 1, "username": "demo"}
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
+async def get_current_user() -> dict:
     return DEMO_USER
 
 
-async def get_optional_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict | None:
+async def get_optional_user() -> dict | None:
     return DEMO_USER

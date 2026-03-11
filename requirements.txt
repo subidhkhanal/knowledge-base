@@ -36,9 +36,6 @@ cohere>=5.0.0
 # Hybrid Retrieval
 rank-bm25>=0.2.2
 
-# Authentication
-python-jose[cryptography]>=3.3.0
-
 # Database (PostgreSQL)
 asyncpg>=0.29.0
 
