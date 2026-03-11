@@ -2,7 +2,7 @@
 
 A full-stack RAG (Retrieval-Augmented Generation) system that lets you build a searchable knowledge base from documents, AI conversations, and web articles. Ask questions and get AI-powered answers grounded in your own content.
 
-**[Live Demo](https://personal-assistant-indol-omega.vercel.app)** | **[API](https://personal-assistant-backend-72zo.onrender.com/health)**
+**[Live Demo](https://personal-assistant-indol-omega.vercel.app)** | **[API](https://personal-assistant-production.up.railway.app/health)**
 
 ## Architecture
 
@@ -62,7 +62,7 @@ Chrome Extension ──► Frontend (Next.js) ──► Backend (FastAPI) ──
 | Search | BM25 + semantic hybrid with RRF |
 | Frontend | Next.js 16, React 19, Tailwind CSS v4, SWR |
 | Extension | Chrome Manifest V3 |
-| Hosting | Render (backend), Vercel (frontend) |
+| Hosting | Railway (backend), Vercel (frontend) |
 
 ## API Endpoints
 
