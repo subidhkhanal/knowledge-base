@@ -1,35 +1,11 @@
-"""LLM-powered conversation/article transformation using Groq."""
+"""LLM-powered article HTML generation using Groq."""
 
 import logging
-from typing import List, Dict, Optional
+from typing import Optional
 from groq import Groq
 from backend.config import GROQ_API_KEY, GROQ_MODEL
 
 logger = logging.getLogger(__name__)
-
-
-STRUCTURING_PROMPT = """You are an editor. Reformat this raw AI chatbot conversation into a well-structured article. The conversation can be about any topic — programming, planning, learning, or anything else.
-
-CRITICAL: The article MUST be approximately the same length as the input. Do NOT shorten, condense, or summarize. Every piece of information from the conversation must appear in the article.
-
-RULES:
-1. Preserve ALL specific details: names, tools, decisions, examples, numbers, links, and any concrete information mentioned in the conversation.
-2. Organize into logical sections with clear ## headings (markdown H2).
-3. Preserve ALL code snippets exactly as they appear, in ```language blocks.
-4. Include EVERY distinct topic, concept, decision, and explanation. If it was discussed, it must be in the article.
-5. Use simple, clear language. Write as if explaining to someone new to the topic.
-6. Where the conversation describes a process or flow, use a step-by-step list or a Mermaid flowchart (```mermaid) to illustrate it.
-7. Remove only true filler (greetings, "thanks", "okay") but keep ALL substantive discussion including reasoning, trade-offs, and alternatives considered.
-8. Output clean Markdown only.
-9. Do NOT add information that wasn't in the conversation.
-10. Do NOT include any preamble like "Here's the article". Just output the content directly.
-
-TITLE: {title}
-
-RAW CONVERSATION:
-{conversation}
-
-STRUCTURED ARTICLE (Markdown):"""
 
 
 def _resolve_groq_key(groq_api_key: Optional[str] = None) -> str:
@@ -41,94 +17,6 @@ def _resolve_groq_key(groq_api_key: Optional[str] = None) -> str:
             "or get a free key at https://console.groq.com"
         )
     return key
-
-
-def structure_conversation(
-    conversation: List[Dict[str, str]],
-    title: str,
-    groq_api_key: Optional[str] = None,
-) -> str:
-    """
-    Send raw conversation to Groq LLM to structure into a clean article.
-
-    Args:
-        conversation: List of {"role": "user"|"assistant", "content": "..."}
-        title: Article title
-        groq_api_key: Optional user-provided Groq API key (BYOK)
-
-    Returns:
-        Structured article content in Markdown.
-    """
-    client = Groq(api_key=_resolve_groq_key(groq_api_key))
-
-    # Single-message paste: use raw text directly (no "Assistant:" wrapper)
-    if len(conversation) == 1:
-        conv_text = conversation[0]["content"]
-    else:
-        conv_text = _format_conversation(conversation)
-
-    logger.info(f"Structurer input: {len(conv_text)} chars, title: {title}")
-
-    # Process in segments so LLM preserves detail instead of summarizing
-    MAX_CHARS = 12000
-
-    if len(conv_text) > MAX_CHARS:
-        return _structure_in_chunks(client, conv_text, title, MAX_CHARS)
-
-    return _call_groq(client, title, conv_text)
-
-
-def _format_conversation(conversation: List[Dict[str, str]]) -> str:
-    """Convert conversation list to readable text."""
-    parts = []
-    for msg in conversation:
-        label = "User" if msg["role"] == "user" else "Assistant"
-        parts.append(f"\n{label}: {msg['content']}\n")
-    return "".join(parts)
-
-
-def _call_groq(client: Groq, title: str, conv_text: str) -> str:
-    """Make a single Groq API call to structure conversation text."""
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[{
-            "role": "user",
-            "content": STRUCTURING_PROMPT.format(title=title, conversation=conv_text),
-        }],
-        temperature=0.3,
-        max_tokens=32768,
-    )
-    result = response.choices[0].message.content
-    logger.info(f"Structurer output: {len(result)} chars (finish_reason={response.choices[0].finish_reason})")
-    return result
-
-
-def _structure_in_chunks(
-    client: Groq, conv_text: str, title: str, max_chars: int
-) -> str:
-    """Structure a long conversation by processing paragraph-aligned parts."""
-    paragraphs = conv_text.split("\n\n")
-    parts = []
-    current_chunk = ""
-    chunk_num = 1
-
-    for para in paragraphs:
-        if len(current_chunk) + len(para) + 2 > max_chars and current_chunk:
-            part_title = f"{title} (Part {chunk_num})"
-            logger.info(f"Processing chunk {chunk_num}: {len(current_chunk)} chars")
-            parts.append(_call_groq(client, part_title, current_chunk))
-            current_chunk = para
-            chunk_num += 1
-        else:
-            current_chunk = current_chunk + "\n\n" + para if current_chunk else para
-
-    if current_chunk.strip():
-        part_title = f"{title} (Part {chunk_num})" if chunk_num > 1 else title
-        logger.info(f"Processing chunk {chunk_num}: {len(current_chunk)} chars")
-        parts.append(_call_groq(client, part_title, current_chunk))
-
-    logger.info(f"Structured {chunk_num} chunks, total output: {sum(len(p) for p in parts)} chars")
-    return "\n\n".join(parts)
 
 
 # --- HTML article structuring ---
@@ -308,76 +196,3 @@ def _structure_html_in_chunks(
 
     logger.info(f"HTML structured {chunk_num} chunks, total output: {sum(len(p) for p in parts)} chars")
     return "\n".join(parts)
-
-
-# --- Web article structuring ---
-
-WEB_ARTICLE_PROMPT = """You are a technical editor. Clean up and structure this web article content into a well-organized Markdown document.
-
-RULES:
-1. Preserve the key content and meaning of the article.
-2. Organize into logical sections with clear ## headings (markdown H2).
-3. Preserve ALL code snippets exactly as they appear, in ```language blocks.
-4. Remove navigation elements, ads, footers, and other non-content text.
-5. Add a "## Key Takeaways" section at the end with 3-5 bullet points.
-6. Write in clear, concise prose.
-7. Output clean Markdown only.
-8. Do NOT add information that wasn't in the original article.
-9. Do NOT include any preamble like "Here's the article". Just output the content directly.
-
-TITLE: {title}
-SOURCE URL: {url}
-
-RAW ARTICLE CONTENT:
-{content}
-
-STRUCTURED ARTICLE (Markdown):"""
-
-
-def structure_web_article(
-    content: str,
-    title: str,
-    url: str,
-    groq_api_key: Optional[str] = None,
-) -> str:
-    """
-    Structure a web article's raw text content into a clean Markdown article.
-
-    Args:
-        content: Raw text content extracted by Readability.js
-        title: Article title
-        url: Original article URL
-        groq_api_key: Optional user-provided Groq API key
-
-    Returns:
-        Structured article content in Markdown.
-    """
-    client = Groq(api_key=_resolve_groq_key(groq_api_key))
-
-    MAX_CHARS = 60000
-
-    if len(content) > MAX_CHARS:
-        # Process in chunks for very long articles
-        parts = []
-        for i in range(0, len(content), MAX_CHARS):
-            chunk = content[i : i + MAX_CHARS]
-            chunk_num = i // MAX_CHARS + 1
-            part_title = f"{title} (Part {chunk_num})"
-            parts.append(_call_web_article_groq(client, part_title, url, chunk))
-        return "\n\n".join(parts)
-
-    return _call_web_article_groq(client, title, url, content)
-
-
-def _call_web_article_groq(client: Groq, title: str, url: str, content: str) -> str:
-    """Make a single Groq API call to structure web article content."""
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[{
-            "role": "user",
-            "content": WEB_ARTICLE_PROMPT.format(title=title, url=url, content=content),
-        }],
-        temperature=0.3,
-        max_tokens=32768,
-    )
-    return response.choices[0].message.content

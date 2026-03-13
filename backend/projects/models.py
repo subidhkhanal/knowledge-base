@@ -32,12 +32,3 @@ class ProjectDetailResponse(ProjectResponse):
     """Project detail with articles and documents."""
     articles: List[dict] = []
     documents: List[dict] = []
-
-
-class WebArticlePublishRequest(BaseModel):
-    """Request body for publishing a web article via Readability.js."""
-    title: str = Field(..., min_length=1, max_length=500)
-    content: str = Field(..., min_length=1)
-    url: str = Field(..., min_length=1)
-    tags: List[str] = Field(default_factory=list)
-    project_slug: Optional[str] = None
