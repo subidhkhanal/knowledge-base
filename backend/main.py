@@ -71,6 +71,7 @@ async def startup():
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_API_KEY"] = LANGSMITH_API_KEY
         os.environ["LANGCHAIN_PROJECT"] = LANGSMITH_PROJECT
+        os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     await init_db()
