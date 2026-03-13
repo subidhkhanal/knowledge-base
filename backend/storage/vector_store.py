@@ -111,6 +111,16 @@ class VectorStore:
             if doc.get("project_id") is not None:
                 metadata["project_id"] = int(doc["project_id"])
 
+            # EPUB heading structure metadata
+            if doc.get("chapter_title"):
+                metadata["chapter_title"] = str(doc["chapter_title"])
+            if doc.get("section_title"):
+                metadata["section_title"] = str(doc["section_title"])
+            if doc.get("heading_level") is not None:
+                metadata["heading_level"] = int(doc["heading_level"])
+            if doc.get("heading_hierarchy"):
+                metadata["heading_hierarchy"] = doc["heading_hierarchy"]
+
             metadatas.append(metadata)
 
         # Get embeddings for all texts

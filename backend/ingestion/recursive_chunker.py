@@ -7,9 +7,11 @@ from backend.config import CHUNK_SIZE, CHUNK_OVERLAP
 class RecursiveChunker:
     """Hierarchical recursive text splitter: paragraphs -> sentences -> tokens."""
 
-    def __init__(self, chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP):
+    def __init__(self, chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP,
+                 prepend_headings: bool = True):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.prepend_headings = prepend_headings
         self.encoder = tiktoken.get_encoding("cl100k_base")
 
         self.splitter = RecursiveCharacterTextSplitter(
@@ -26,6 +28,13 @@ class RecursiveChunker:
     def _split_text(self, text: str) -> List[str]:
         return self.splitter.split_text(text)
 
+    def _build_heading_prefix(self, doc: Dict[str, Any]) -> str:
+        """Build a markdown heading prefix from the document's heading hierarchy."""
+        hierarchy = doc.get("heading_hierarchy")
+        if not hierarchy:
+            return ""
+        return "## " + " > ".join(hierarchy) + "\n\n"
+
     def chunk_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Split documents into chunks while preserving metadata.
@@ -35,6 +44,15 @@ class RecursiveChunker:
 
         for doc in documents:
             text = doc.get("text", "")
+
+            # Prepend heading hierarchy for embedding context
+            prefix = ""
+            if self.prepend_headings:
+                prefix = self._build_heading_prefix(doc)
+
+            if prefix:
+                text = prefix + text
+
             chunks = self._split_text(text)
 
             for i, chunk in enumerate(chunks):

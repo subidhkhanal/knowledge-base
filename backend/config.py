@@ -23,8 +23,8 @@ MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024  # 10 MB in bytes
 UPLOADS_DIR = os.getenv("UPLOADS_DIR", str(BASE_DIR / "data" / "uploads"))
 
 # Chunking settings
-CHUNK_SIZE = 800  # tokens
-CHUNK_OVERLAP = 150  # tokens
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "512"))  # tokens (recommended: 400-512)
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "75"))  # tokens (~15% overlap)
 CHUNKING_METHOD = os.getenv("CHUNKING_METHOD", "recursive")  # "linear" or "recursive"
 
 # Hybrid retrieval
