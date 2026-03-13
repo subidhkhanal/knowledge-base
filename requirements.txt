@@ -45,3 +45,6 @@ supabase>=2.0.0
 # Research Agent
 tavily-python
 
+# Observability (LangSmith tracing)
+langsmith>=0.1.0
+

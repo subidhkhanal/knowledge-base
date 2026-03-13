@@ -9,6 +9,7 @@ import logging
 from typing import List, Dict, Optional, Callable, Any
 
 from tavily import TavilyClient
+from langsmith import traceable
 
 from backend.config import TAVILY_API_KEY
 
@@ -25,6 +26,7 @@ def _get_tavily_client(tavily_api_key: Optional[str] = None) -> TavilyClient:
     return TavilyClient(api_key=key)
 
 
+@traceable(name="research_pkb_search")
 def search_pkb(
     query: str,
     query_engine: Any,
@@ -159,6 +161,7 @@ def research_subtopic(
     }
 
 
+@traceable(name="research_execute")
 def execute_research_plan(
     plan: dict,
     tavily_api_key: Optional[str] = None,

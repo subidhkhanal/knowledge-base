@@ -6,6 +6,7 @@ import time
 from typing import Optional, Callable
 
 from groq import Groq
+from langsmith import traceable
 
 from backend.config import GROQ_API_KEY, GROQ_MODEL
 from backend.research.prompts import (
@@ -27,6 +28,7 @@ def _rate_limited_sleep():
     _last_groq_call = time.time()
 
 
+@traceable(name="research_write")
 def write_article(
     plan: dict,
     analysis: dict,

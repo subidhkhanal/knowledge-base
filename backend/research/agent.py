@@ -5,6 +5,7 @@ import time
 import logging
 from typing import Optional, Callable, Any, Dict
 
+from langsmith import traceable
 from backend.research.planner import create_research_plan
 from backend.research.researcher import execute_research_plan
 from backend.research.analyzer import analyze_research
@@ -42,6 +43,7 @@ QUALITY_PRESETS = {
 }
 
 
+@traceable(name="research_pipeline")
 def run_research_pipeline(
     topic: str,
     groq_api_key: Optional[str] = None,

@@ -2,6 +2,7 @@ import asyncio
 import queue
 from typing import List, Dict, Any, Optional, AsyncGenerator
 from groq import Groq
+from langsmith import traceable
 from backend.config import (
     GROQ_API_KEY, GROQ_MODEL,
     SYSTEM_PROMPT,
@@ -78,6 +79,7 @@ Answer the question based on the context above. Do NOT include source citations 
             "provider": None
         }
 
+    @traceable(name="groq_rag_generate")
     def _call_groq(self, prompt: str) -> Optional[str]:
         """Call Groq API."""
         if not self.groq_client:
@@ -97,6 +99,7 @@ Answer the question based on the context above. Do NOT include source citations 
         except Exception:
             return None
 
+    @traceable(name="groq_rag_stream")
     def _call_groq_stream(self, prompt: str):
         """Call Groq API with streaming, yielding tokens."""
         if not self.groq_client:

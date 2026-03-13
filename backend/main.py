@@ -65,6 +65,13 @@ app.include_router(research_router)
 
 @app.on_event("startup")
 async def startup():
+    # Enable LangSmith tracing if configured
+    from backend.config import LANGSMITH_TRACING, LANGSMITH_API_KEY, LANGSMITH_PROJECT
+    if LANGSMITH_TRACING and LANGSMITH_API_KEY:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_API_KEY"] = LANGSMITH_API_KEY
+        os.environ["LANGCHAIN_PROJECT"] = LANGSMITH_PROJECT
+
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     await init_db()
     # Ensure demo user exists for portfolio demo mode

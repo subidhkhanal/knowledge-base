@@ -65,6 +65,12 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 # Get your free API key at https://tavily.com
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 
+# LangSmith observability (free tier: 5K traces/month)
+# Get your API key at https://smith.langchain.com
+LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY", "")
+LANGSMITH_PROJECT = os.getenv("LANGSMITH_PROJECT", "pkb-production")
+LANGSMITH_TRACING = os.getenv("LANGSMITH_TRACING", "false").lower() == "true"
+
 # LLM generation settings
 LLM_MAX_TOKENS = 2048  # Max response tokens
 LLM_TEMPERATURE = 0.3  # Lower = more focused, higher = more creative
