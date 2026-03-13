@@ -185,7 +185,7 @@ class QueryRequest(BaseModel):
     source_filter: Optional[str] = None
     chat_history: Optional[List[dict]] = None
     conversation_id: Optional[int] = None
-    mode: str = "rag"  # "rag" | "llm"
+    mode: str = "rag"  # "rag" | "research"
 
 
 class TextUploadRequest(BaseModel):
@@ -497,23 +497,8 @@ async def query(
 
         route_handlers = components.get("route_handlers")
 
-        if request.mode == "llm":
-            # Direct LLM mode — no retrieval
-            system_prompt = "You are a helpful assistant. Answer the user's question directly and concisely."
-            rh = route_handlers
-            if rh:
-                try:
-                    for token in rh._call_llm_stream(system_prompt, request.question):
-                        accumulated_answer.append(token)
-                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-                except Exception:
-                    yield f"data: {json.dumps({'type': 'token', 'content': 'Unable to generate a response. Please check your API keys.'})}\n\n"
-            else:
-                yield f"data: {json.dumps({'type': 'token', 'content': 'LLM not available. Please check your API keys.'})}\n\n"
-            yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'groq'})}\n\n"
-
         # Use query routing if enabled (RAG mode)
-        elif ENABLE_QUERY_ROUTING and components["query_router"] is not None and route_handlers is not None:
+        if ENABLE_QUERY_ROUTING and components["query_router"] is not None and route_handlers is not None:
             route_result = await components["query_router"].classify(
                 request.question,
                 chat_history=chat_history

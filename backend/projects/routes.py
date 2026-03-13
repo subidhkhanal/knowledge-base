@@ -189,7 +189,6 @@ async def project_scoped_query(
     top_k = body.get("top_k", 5)
     threshold = body.get("threshold", 0.3)
     chat_history = body.get("chat_history")
-    mode = body.get("mode", "rag")
 
     user_id = current_user["user_id"]
     project = await db.get_project_by_slug(slug, user_id)
@@ -206,78 +205,65 @@ async def project_scoped_query(
     async def event_stream():
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
 
-        if mode == "llm":
-            system_prompt = "You are a helpful assistant. Answer the user's question directly and concisely."
-            rh = components.get("route_handlers")
-            if rh:
-                try:
-                    for token in rh._call_llm_stream(system_prompt, question):
-                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-                except Exception:
-                    yield f"data: {json.dumps({'type': 'token', 'content': 'Unable to generate a response.'})}\n\n"
-            else:
-                yield f"data: {json.dumps({'type': 'token', 'content': 'LLM not available. Please configure GROQ_API_KEY.'})}\n\n"
-            yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'groq'})}\n\n"
-        else:
-            # Query routing: handle non-retrieval routes (GREETING, META, etc.)
-            from backend.config import ENABLE_QUERY_ROUTING
-            from backend.routing.query_router import RouteType
-            query_router = components.get("query_router")
-            rh = components.get("route_handlers")
-            effective_query = question
+        # Query routing: handle non-retrieval routes (GREETING, META, etc.)
+        from backend.config import ENABLE_QUERY_ROUTING
+        from backend.routing.query_router import RouteType
+        query_router = components.get("query_router")
+        rh = components.get("route_handlers")
+        effective_query = question
 
-            if ENABLE_QUERY_ROUTING and query_router and rh:
-                route_result = await query_router.classify(question)
-                route_type = route_result.route_type
+        if ENABLE_QUERY_ROUTING and query_router and rh:
+            route_result = await query_router.classify(question)
+            route_type = route_result.route_type
 
-                # Non-retrieval routes: GREETING, CLARIFICATION, OUT_OF_SCOPE
-                if route_type in (RouteType.GREETING, RouteType.CLARIFICATION, RouteType.OUT_OF_SCOPE):
-                    async for event in rh.handle_stream(
-                        route_type=route_type,
-                        query=question,
-                        rewritten_query=route_result.rewritten_query,
-                    ):
-                        yield f"data: {json.dumps(event)}\n\n"
-                    return
-
-                # META: list this project's documents specifically
-                if route_type == RouteType.META:
-                    if source_names:
-                        doc_list = "\n".join(f"- {name}" for name in source_names)
-                        answer = f"This project has {len(source_names)} document(s):\n\n{doc_list}\n\nYou can ask me questions about any of these!"
-                    else:
-                        answer = "This project doesn't have any documents yet. Upload some to get started!"
-                    yield f"data: {json.dumps({'type': 'token', 'content': answer})}\n\n"
-                    yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'system', 'route_type': 'META'})}\n\n"
-                    return
-
-                # KNOWLEDGE, SUMMARY, COMPARISON, FOLLOW_UP: use rewritten query for retrieval
-                effective_query = route_result.rewritten_query or question
-
-            qe = components["query_engine"]
-
-            all_chunks = []
-            for name in source_names:
-                chunks, _ = qe.retrieve(
-                    question=effective_query,
-                    top_k=top_k,
-                    threshold=threshold,
-                    source_filter=name,
-                )
-                all_chunks.extend(chunks)
-
-            all_chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
-            chunks = all_chunks[:top_k]
-
-            try:
-                async for event in qe.llm.generate_response_stream(
-                    query=effective_query,
-                    chunks=chunks,
+            # Non-retrieval routes: GREETING, CLARIFICATION, OUT_OF_SCOPE
+            if route_type in (RouteType.GREETING, RouteType.CLARIFICATION, RouteType.OUT_OF_SCOPE):
+                async for event in rh.handle_stream(
+                    route_type=route_type,
+                    query=question,
+                    rewritten_query=route_result.rewritten_query,
                 ):
                     yield f"data: {json.dumps(event)}\n\n"
-            except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
-                yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
+                return
+
+            # META: list this project's documents specifically
+            if route_type == RouteType.META:
+                if source_names:
+                    doc_list = "\n".join(f"- {name}" for name in source_names)
+                    answer = f"This project has {len(source_names)} document(s):\n\n{doc_list}\n\nYou can ask me questions about any of these!"
+                else:
+                    answer = "This project doesn't have any documents yet. Upload some to get started!"
+                yield f"data: {json.dumps({'type': 'token', 'content': answer})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0, 'provider': 'system', 'route_type': 'META'})}\n\n"
+                return
+
+            # KNOWLEDGE, SUMMARY, COMPARISON, FOLLOW_UP: use rewritten query for retrieval
+            effective_query = route_result.rewritten_query or question
+
+        qe = components["query_engine"]
+
+        all_chunks = []
+        for name in source_names:
+            chunks, _ = qe.retrieve(
+                question=effective_query,
+                top_k=top_k,
+                threshold=threshold,
+                source_filter=name,
+            )
+            all_chunks.extend(chunks)
+
+        all_chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+        chunks = all_chunks[:top_k]
+
+        try:
+            async for event in qe.llm.generate_response_stream(
+                query=effective_query,
+                chunks=chunks,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': f'LLM error: {str(e)}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'sources': [], 'chunks_used': 0})}\n\n"
 
     return StreamingResponse(
         event_stream(),
