@@ -1,8 +1,8 @@
 # Personal Knowledge Base
 
-A full-stack RAG system that turns your documents, AI conversations, and web articles into a searchable, queryable knowledge base — with an autonomous research agent that writes long-form articles from scratch.
+A full-stack RAG system that turns your documents into a searchable, queryable knowledge base.
 
-**[Live Demo](https://personal-assistant-indol-omega.vercel.app)** | **[API](https://personal-assistant-production.up.railway.app/health)**
+**[Live Demo](https://personal-assistant-indol-omega.vercel.app)** | **[API](https://d3kmysbupw.us-east-2.awsapprunner.com/health)**
 
 ---
 
@@ -11,19 +11,18 @@ A full-stack RAG system that turns your documents, AI conversations, and web art
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Frontend (Next.js)                        │
-│  Chat (RAG / LLM / Research)  ·  Article Reader  ·  Projects   │
+│  Chat (RAG)  ·  Document Reader  ·  Projects                   │
 └────────────────────────────┬────────────────────────────────────┘
                              │ SSE streaming + REST
 ┌────────────────────────────▼────────────────────────────────────┐
 │                        Backend (FastAPI)                         │
 │                                                                  │
-│  ┌─────────────┐   ┌──────────────────┐   ┌──────────────────┐ │
-│  │  Ingestion  │   │  RAG Pipeline    │   │ Research Agent   │ │
-│  │  PDF/EPUB   │   │  Query Router    │   │  Planner         │ │
-│  │  DOCX/HTML  │──►│  Hybrid Retriev. │   │  Researcher      │ │
-│  │  TXT/MD     │   │  Cohere Rerank   │   │  Analyzer        │ │
-│  └─────────────┘   └──────────────────┘   │  Writer          │ │
-│                                            └──────────────────┘ │
+│  ┌─────────────┐   ┌──────────────────┐                        │
+│  │  Ingestion  │   │  RAG Pipeline    │                        │
+│  │  PDF/EPUB   │   │  Query Router    │                        │
+│  │  DOCX/HTML  │──►│  Hybrid Retriev. │                        │
+│  │  TXT/MD     │   │  Cohere Rerank   │                        │
+│  └─────────────┘   └──────────────────┘                        │
 └──────┬──────────────────────┬───────────────────────────────────┘
        │                      │
   ┌────▼────┐   ┌─────────────▼──────────────────────────┐
@@ -39,14 +38,8 @@ A full-stack RAG system that turns your documents, AI conversations, and web art
 ### Hybrid Retrieval with Reciprocal Rank Fusion
 Two retrieval strategies run in parallel on every query: BM25 for exact lexical matching and Pinecone dense vectors for semantic similarity. Results are merged using **Reciprocal Rank Fusion** (`score = 1 / (k + rank)`, k=60), which consistently outperforms either method alone without requiring manual weight tuning. A Cohere `rerank-english-v3.0` pass then reorders the fused candidates for final precision.
 
-### Knowledge Flywheel
-The research agent searches the personal knowledge base *first* before going to the web. As you publish more articles, future research runs build on what's already been written — the PKB improves itself with each use.
-
-### 4-Phase Autonomous Research Agent
-Research runs as a structured pipeline across four LLM calls with separate concerns: planning subtopics and article structure, executing web + PKB search per subtopic, analyzing for themes/contradictions/gaps, then writing section-by-section with continuity context. Each phase streams progress events to the frontend via SSE.
-
 ### SSE Streaming Throughout
-All long-running operations (RAG queries, research, ingestion status) stream results as Server-Sent Events. The frontend consumes token streams with a queue-based drain interval for smooth character-by-character rendering without layout thrash.
+All long-running operations (RAG queries, ingestion status) stream results as Server-Sent Events. The frontend consumes token streams with a queue-based drain interval for smooth character-by-character rendering without layout thrash.
 
 ### Lazy-Loaded Components
 All external API clients (Pinecone, Cohere, Groq) are initialized on first request via `get_components()` rather than at startup. This means the server is immediately available, failures are scoped to individual requests, and development works without all API keys configured.
@@ -58,13 +51,9 @@ All vectors stored in a shared Pinecone index carry a `user_id` metadata field. 
 
 ## Features
 
-### RAG Chat — Three Modes
+### RAG Chat
 
-**RAG mode** retrieves the most relevant chunks from your knowledge base and grounds the LLM response in them. Sources are returned alongside the answer with chunk-level citations.
-
-**LLM mode** bypasses retrieval entirely — useful for general reasoning, drafting, or questions that don't need your documents.
-
-**Research mode** triggers the autonomous research agent, which plans, searches, writes, and publishes a full article while streaming phase-by-phase progress back to you.
+Retrieves the most relevant chunks from your knowledge base and grounds the LLM response in them. Sources are returned alongside the answer with chunk-level citations.
 
 ### Document Ingestion
 
@@ -102,74 +91,9 @@ Configuration (all tunable via env):
 - `RRF_K = 60` — rank fusion parameter
 - `RERANK_TOP_K = 5` — final results after reranking
 
-### Article Publishing Pipeline
-
-Conversations and web content are converted into structured, searchable articles:
-
-```
-Input (conversation or web content)
-  ↓
-Groq LLM structurer → markdown + HTML (multi-call for long content)
-  ↓
-Recursive chunker (800 tokens, 150 overlap)
-  ↓
-Cohere embeddings → Pinecone upsert
-  ↓
-BM25 index update
-  ↓
-PostgreSQL: slug, title, markdown, HTML, tags, project_id
-```
-
-Published articles are immediately queryable via RAG and browsable in the article reader.
-
-### Autonomous Research Agent
-
-The research agent runs as a 4-phase pipeline, producing a complete long-form article on any topic by combining your personal knowledge base with live web search.
-
-```
-User query + quality preset
-        ↓
-┌───────────────┐
-│   PLANNER     │  Groq LLM → structured JSON plan
-│               │  title, subtitle, 5–20 subtopics, outline, tone
-└───────┬───────┘
-        ↓
-┌───────────────┐
-│  RESEARCHER   │  For each subtopic (sequential):
-│               │  1. PKB hybrid retrieval (knowledge flywheel)
-│               │  2. Tavily web search (advanced depth, top 5 results)
-│               │  3. Full content extraction from top 3 URLs
-└───────┬───────┘
-        ↓
-┌───────────────┐
-│   ANALYZER    │  Groq LLM → section writing briefs
-│               │  Identifies: themes, contradictions, gaps, strongest sources
-│               │  Respects 11K TPM Groq free-tier budget
-└───────┬───────┘
-        ↓
-┌───────────────┐
-│    WRITER     │  Groq LLM → intro + sections + conclusion
-│               │  Continuity context: last 3 sections as rolling window
-│               │  Retry logic with 3s backoff on failed sections
-└───────┬───────┘
-        ↓
-Chunk → embed → Pinecone + BM25 + PostgreSQL
-(article instantly searchable after generation)
-```
-
-**Quality presets:**
-
-| Preset | Subtopics | Word Scale | Use When |
-|--------|-----------|------------|----------|
-| `quick` | 3–6 | 0.3x | Fast overview, ~3 min |
-| `standard` | 5–15 | 1.0x | Default depth, ~8 min |
-| `deep` | 8–20 | 1.8x | Comprehensive research, ~20 min |
-
-**Rate limiting:** 2-second minimum between Groq calls enforces the 30 RPM free-tier limit without dropping requests.
-
 ### Project Organization
 
-Group related articles and documents into projects. RAG queries can be scoped to a single project (`POST /api/projects/{slug}/query`), filtering retrieval to only that project's content.
+Group related documents into projects. RAG queries can be scoped to a single project (`POST /api/projects/{slug}/query`), filtering retrieval to only that project's content.
 
 ---
 
@@ -184,10 +108,10 @@ Group related articles and documents into projects. RAG queries can be scoped to
 | Reranking | Cohere `rerank-english-v3.0` | Cross-encoder precision on top of ANN recall |
 | LLM | Groq `llama-3.3-70b-versatile` | Free tier, 70B quality, fast inference |
 | Sparse Retrieval | rank-bm25 | In-memory, zero-latency lexical search |
-| Web Search | Tavily | Research-optimized, full content extraction |
 | Query Routing | LangChain LCEL | Composable, typed routing chains |
 | Frontend | Next.js 16 + React 19 + Tailwind v4 | App Router, SWR caching, streaming |
-| Hosting | Railway (backend) + Vercel (frontend) | Zero-config deploys, free tier |
+| Hosting | AWS App Runner (backend) + Vercel (frontend) | Auto-scaling containers, HTTPS, health checks |
+| Observability | LangSmith | LLM tracing, token usage, latency monitoring |
 
 ---
 
@@ -198,7 +122,6 @@ Group related articles and documents into projects. RAG queries can be scoped to
 - Python 3.10+
 - Node.js 18+
 - Free API keys: [Groq](https://console.groq.com) · [Pinecone](https://pinecone.io) · [Cohere](https://cohere.com) · [Supabase](https://supabase.com)
-- Optional: [Tavily](https://tavily.com) for research agent
 
 ### Backend
 
@@ -227,6 +150,28 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+---
+
+## Deployment
+
+### Backend — AWS App Runner
+
+The backend runs as a containerized Python service on AWS App Runner with auto-scaling (1–25 instances), HTTP health checks, and zero-downtime deployments.
+
+```
+GitHub (main branch)
+  ↓  Source code repository
+AWS App Runner
+  ├── Build: pip3 install -t . -r requirements.txt
+  ├── Start: python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+  ├── Health: HTTP GET /health
+  └── Env vars: configured via App Runner console (secrets never in repo)
+```
+
+### Frontend — Vercel
+
+The Next.js frontend deploys automatically on every push via Vercel's GitHub integration. The `NEXT_PUBLIC_API_URL` environment variable points to the App Runner backend URL.
 
 ---
 
@@ -262,12 +207,6 @@ Open [http://localhost:3000](http://localhost:3000).
 |----------|----------|-------------|
 | `GROQ_API_KEY` | Yes | Groq API key |
 | `GROQ_MODEL` | No | Default: `llama-3.3-70b-versatile` |
-
-**Search & Research**
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TAVILY_API_KEY` | No | Required for research agent |
 
 **App Config**
 
@@ -314,20 +253,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/query` | RAG/LLM query — streams `token` events then `done` with sources |
+| POST | `/api/query` | RAG query — streams `token` events then `done` with sources |
 | POST | `/api/projects/{slug}/query` | Same, scoped to one project |
-
-### Articles
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/publish` | Publish conversation as article |
-| POST | `/api/publish/web-article` | Publish web article |
-| GET | `/api/articles` | List all articles |
-| GET | `/api/articles/{slug}` | Get article with markdown + HTML |
-| PUT | `/api/articles/{slug}` | Update article |
-| DELETE | `/api/articles/{slug}` | Delete article and its vectors |
-| POST | `/api/articles/{slug}/reprocess` | Regenerate HTML for article |
 
 ### Projects
 
@@ -335,7 +262,7 @@ Open [http://localhost:3000](http://localhost:3000).
 |--------|----------|-------------|
 | POST | `/api/projects` | Create project |
 | GET | `/api/projects` | List all projects |
-| GET | `/api/projects/{slug}` | Get project with articles and documents |
+| GET | `/api/projects/{slug}` | Get project with documents |
 | PUT | `/api/projects/{slug}` | Update project |
 | DELETE | `/api/projects/{slug}` | Delete project |
 
@@ -348,28 +275,6 @@ Open [http://localhost:3000](http://localhost:3000).
 | GET | `/api/conversations/{id}/messages` | Get messages |
 | DELETE | `/api/conversations/{id}` | Delete conversation |
 
-### Research (SSE)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/research/stream` | Start research — streams `progress` events then `complete` |
-
-**Research request:**
-```json
-{
-  "topic": "string",
-  "project_slug": "optional-project",
-  "quality": "quick | standard | deep"
-}
-```
-
-**SSE event types:**
-```json
-{"type": "progress", "phase": "planning|researching|analyzing|writing|storing", "step": 3, "total": 12, "message": "..."}
-{"type": "complete", "slug": "...", "title": "...", "word_count": 8400, "sources_count": 24}
-{"type": "error", "message": "..."}
-```
-
 ---
 
 ## Project Structure
@@ -377,17 +282,12 @@ Open [http://localhost:3000](http://localhost:3000).
 ```
 personal-assistant/
 ├── requirements.txt
-├── railway.toml              # Railway deployment (nixpacks, healthcheck path)
 ├── backend/
 │   ├── main.py               # FastAPI app, lifespan, component initialization
 │   ├── config.py             # All env vars and tunable constants
 │   ├── auth/
-│   │   ├── dependencies.py   # get_current_user(), JWT validation
+│   │   ├── dependencies.py   # get_current_user(), demo mode auth
 │   │   └── database.py       # init_db(), creates all tables on startup
-│   ├── articles/
-│   │   ├── routes.py         # Publish, list, get, update, delete endpoints
-│   │   ├── structurer.py     # Groq LLM: conversation → structured markdown
-│   │   └── html_generator.py # Groq LLM: markdown → display HTML
 │   ├── projects/
 │   │   └── routes.py         # Project CRUD + scoped query endpoint
 │   ├── conversations/
@@ -406,14 +306,6 @@ personal-assistant/
 │   │   └── reranker.py       # Cohere reranking
 │   ├── routing/
 │   │   └── query_router.py   # LCEL-based query classifier
-│   ├── research/
-│   │   ├── agent.py          # Pipeline orchestrator, quality presets
-│   │   ├── planner.py        # Phase 1: topic → subtopics + outline
-│   │   ├── researcher.py     # Phase 2: PKB + Tavily per subtopic
-│   │   ├── analyzer.py       # Phase 3: synthesis + writing briefs
-│   │   ├── writer.py         # Phase 4: section-by-section writing
-│   │   ├── prompts.py        # All LLM system prompts
-│   │   └── routes.py         # SSE streaming endpoint
 │   ├── storage/
 │   │   └── vector_store.py   # Pinecone client, embed, upsert, query, delete
 │   ├── llm/
@@ -425,24 +317,21 @@ personal-assistant/
         ├── app/
         │   ├── page.tsx                              # Projects grid (home)
         │   ├── projects/[slug]/page.tsx              # Project detail
-        │   ├── projects/[slug]/articles/[slug]/page.tsx  # Article reader
         │   ├── projects/[slug]/documents/[id]/page.tsx   # Document viewer
-        │   └── research/[slug]/page.tsx              # Research article reader
+        │   └── settings/page.tsx                     # Reading preferences
         ├── components/
-        │   ├── ChatWidget.tsx        # Resizable side panel, 3 modes, SSE consumer
+        │   ├── ChatWidget.tsx        # Resizable side panel, SSE consumer
         │   ├── ChatArea.tsx          # Smart auto-scroll message display
-        │   ├── ChatInput.tsx         # Mode selector, research depth, auto-resize
+        │   ├── ChatInput.tsx         # Text input with auto-resize
         │   ├── MessageBubble.tsx     # Markdown rendering + source citations
         │   ├── ProjectsView.tsx      # Project grid with create/delete
         │   ├── UploadModal.tsx       # File upload with drag-drop + progress
         │   ├── PdfViewer.tsx         # PDF reader (dynamic import, no SSR)
-        │   ├── EbookViewer.tsx       # EPUB reader
-        │   └── TableOfContents.tsx   # Auto-generated TOC for research articles
+        │   └── EbookViewer.tsx       # EPUB reader
         └── hooks/
             ├── useApi.ts             # Base fetch wrapper + XHR streaming
             ├── useChatHistory.ts     # localStorage conversation management
-            ├── useProjects.ts        # SWR project/article/document CRUD
-            ├── useArticles.ts        # SWR article fetching
+            ├── useProjects.ts        # SWR project/document CRUD
             └── useUpload.ts          # Upload with progress tracking
 ```
 

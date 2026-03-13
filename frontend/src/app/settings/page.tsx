@@ -88,7 +88,7 @@ export default function SettingsPage() {
               lineHeight: "1.75",
               color: "var(--text-primary)",
             }}>
-              The quick brown fox jumps over the lazy dog. Reading content will appear in this font and size across articles, chat messages, and documents.
+              The quick brown fox jumps over the lazy dog. Reading content will appear in this font and size across chat messages and documents.
             </p>
           </div>
         </section>

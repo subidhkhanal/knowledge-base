@@ -24,7 +24,7 @@ async def insert_project(
 
 
 async def get_all_projects(user_id: int) -> List[Dict[str, Any]]:
-    """Get all projects with article and document counts."""
+    """Get all projects with document counts."""
     db = await get_central_db()
     try:
         rows = await db.fetch_all(
