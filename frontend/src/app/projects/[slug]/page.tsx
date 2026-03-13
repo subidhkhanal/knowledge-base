@@ -5,32 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
-import { useProject, useDeleteArticle, useDeleteDocument } from "@/hooks/useProjects";
+import { useProject, useDeleteDocument } from "@/hooks/useProjects";
 import { useToasts } from "@/hooks/useToasts";
 import { useUpload } from "@/hooks/useUpload";
 import { ToastContainer } from "@/components/Toast";
 import { UploadModal } from "@/components/UploadModal";
 
-function formatRelativeDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-  return `${Math.floor(diffDays / 365)} years ago`;
-}
-
 const sourceConfig: Record<string, { label: string; color: string; bg: string }> = {
-  claude: { label: "Claude", color: "#f59e0b", bg: "rgba(217, 119, 6, 0.1)" },
-  chatgpt: { label: "ChatGPT", color: "#10b981", bg: "rgba(16, 185, 129, 0.1)" },
-  web: { label: "Web", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
-  paste: { label: "Pasted", color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
-  research: { label: "Research", color: "#6366f1", bg: "rgba(99, 102, 241, 0.1)" },
   pdf: { label: "PDF", color: "#ef4444", bg: "rgba(239, 68, 68, 0.1)" },
   document: { label: "Document", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
 };
@@ -54,37 +35,20 @@ function ProjectDetailContent({ slug }: { slug: string }) {
   const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  const { deleteArticle, isDeleting: isDeletingArticle } = useDeleteArticle();
-  const { deleteDocument, isDeleting: isDeletingDocument } = useDeleteDocument();
+  const { deleteDocument, isDeleting } = useDeleteDocument();
 
-  const [deletingArticle, setDeletingArticle] = useState<{ slug: string; title: string } | null>(null);
   const [deletingDocument, setDeletingDocument] = useState<{ id: number; source: string } | null>(null);
-
-  const isDeleting = isDeletingArticle || isDeletingDocument;
 
   // Close dialog on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setDeletingArticle(null);
         setDeletingDocument(null);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
-
-  const handleDeleteArticle = useCallback(async () => {
-    if (!deletingArticle) return;
-    try {
-      await deleteArticle(deletingArticle.slug);
-      addToast({ type: "success", message: "Article deleted" });
-      setDeletingArticle(null);
-      refetch();
-    } catch (err) {
-      addToast({ type: "error", message: err instanceof Error ? err.message : "Failed to delete article" });
-    }
-  }, [deletingArticle, deleteArticle, addToast, refetch]);
 
   const handleDeleteDocument = useCallback(async () => {
     if (!deletingDocument) return;
@@ -97,8 +61,6 @@ function ProjectDetailContent({ slug }: { slug: string }) {
       addToast({ type: "error", message: err instanceof Error ? err.message : "Failed to delete document" });
     }
   }, [deletingDocument, deleteDocument, addToast, refetch]);
-
-  const showingDialog = deletingArticle || deletingDocument;
 
   return (
     <div className="flex h-screen flex-col" style={{ background: "var(--bg-primary)" }}>
@@ -181,13 +143,13 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                   className="mt-2 text-xs"
                   style={{ color: "var(--text-tertiary)" }}
                 >
-                  {project.article_count} {project.article_count === 1 ? "article" : "articles"} · {project.document_count} {project.document_count === 1 ? "document" : "documents"}
+                  {project.document_count} {project.document_count === 1 ? "document" : "documents"}
                 </p>
               </div>
 
-              {/* Content Section — unified articles + documents */}
+              {/* Documents Section */}
               <section>
-                {project.articles.length === 0 && project.documents.length === 0 && (
+                {project.documents.length === 0 && (
                   <div
                     className="flex flex-col items-center justify-center rounded-xl py-12 text-center"
                     style={{
@@ -208,87 +170,16 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                       </svg>
                     </div>
                     <p className="mb-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      No content yet
+                      No documents yet
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                      Publish conversations or upload documents to this project
+                      Upload documents to this project
                     </p>
                   </div>
                 )}
 
-                {(project.articles.length > 0 || project.documents.length > 0) && (
+                {project.documents.length > 0 && (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {/* Articles */}
-                    {project.articles.map((article, index) => {
-                      const src = getSourceInfo(article.source);
-                      return (
-                        <motion.div
-                          key={`article-${article.slug}`}
-                          initial={{ opacity: 0, y: 24 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            duration: 0.6,
-                            ease: [0.16, 1, 0.3, 1],
-                            delay: index * 0.05,
-                          }}
-                          className="group relative flex flex-col gap-3 rounded-xl p-4 cursor-pointer"
-                          style={{
-                            background: "var(--bg-secondary)",
-                            border: "1px solid var(--border)",
-                            boxShadow: "var(--shadow-card)",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-                          onClick={() => router.push(`/projects/${slug}/articles/${article.slug}`)}
-                        >
-                          <button
-                            className="absolute top-3 right-3 rounded-lg p-1.5 opacity-0 transition-opacity cursor-pointer group-hover:opacity-100"
-                            style={{ color: "var(--text-tertiary)" }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.background = "var(--error-bg)"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-tertiary)"; e.currentTarget.style.background = "transparent"; }}
-                            onClick={(e) => { e.stopPropagation(); setDeletingArticle({ slug: article.slug, title: article.title }); }}
-                          >
-                            <TrashIcon />
-                          </button>
-
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                              style={{ background: src.bg, color: src.color }}
-                            >
-                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: src.color }} />
-                              {src.label}
-                            </span>
-                          </div>
-
-                          <h3 className="text-sm font-medium leading-snug line-clamp-2" style={{ color: "var(--text-primary)" }}>
-                            {article.title}
-                          </h3>
-
-                          {article.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {article.tags.map((tag) => (
-                                <span key={tag} className="rounded-md px-2 py-0.5 text-xs" style={{ background: "var(--accent-subtle)", color: "var(--accent)" }}>
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                            <span>{formatRelativeDate(article.created_at)}</span>
-                            {article.conversation_length > 0 && (
-                              <>
-                                <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
-                                <span>{article.conversation_length} messages</span>
-                              </>
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-
-                    {/* Documents */}
                     {project.documents.map((doc, index) => {
                       const src = getSourceInfo(doc.source_type === "pdf" ? "pdf" : "document");
                       return (
@@ -299,7 +190,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                           transition={{
                             duration: 0.6,
                             ease: [0.16, 1, 0.3, 1],
-                            delay: (project.articles.length + index) * 0.05,
+                            delay: index * 0.05,
                           }}
                           className={`group relative flex flex-col gap-3 rounded-xl p-4${doc.document_id ? " cursor-pointer" : ""}`}
                           style={{
@@ -351,7 +242,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
 
           {/* Delete confirmation dialog */}
           <AnimatePresence>
-            {showingDialog && (
+            {deletingDocument && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -359,7 +250,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                 transition={{ duration: 0.2 }}
                 className="fixed inset-0 z-50 flex items-center justify-center p-4"
                 style={{ background: "rgba(0, 0, 0, 0.3)" }}
-                onClick={() => { setDeletingArticle(null); setDeletingDocument(null); }}
+                onClick={() => setDeletingDocument(null)}
               >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -378,24 +269,24 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                     className="mb-2 text-sm font-semibold"
                     style={{ color: "var(--text-primary)" }}
                   >
-                    Delete {deletingArticle ? "Article" : "Document"}
+                    Delete Document
                   </h3>
                   <p
                     className="mb-5 text-sm leading-relaxed"
                     style={{ color: "var(--text-secondary)" }}
                   >
-                    Are you sure you want to delete &ldquo;{deletingArticle?.title || deletingDocument?.source}&rdquo;? This will permanently remove it and its vector embeddings.
+                    Are you sure you want to delete &ldquo;{deletingDocument.source}&rdquo;? This will permanently remove it and its vector embeddings.
                   </p>
                   <div className="flex justify-end gap-2">
                     <button
-                      onClick={() => { setDeletingArticle(null); setDeletingDocument(null); }}
+                      onClick={() => setDeletingDocument(null)}
                       className="rounded-lg px-3 py-1.5 text-sm cursor-pointer"
                       style={{ color: "var(--text-secondary)" }}
                     >
                       Cancel
                     </button>
                     <button
-                      onClick={deletingArticle ? handleDeleteArticle : handleDeleteDocument}
+                      onClick={handleDeleteDocument}
                       disabled={isDeleting}
                       className="rounded-lg px-4 py-1.5 text-sm font-medium cursor-pointer disabled:opacity-50"
                       style={{
@@ -403,7 +294,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                         color: "white",
                       }}
                     >
-                      {isDeleting ? "Deleting..." : `Delete ${deletingArticle ? "Article" : "Document"}`}
+                      {isDeleting ? "Deleting..." : "Delete Document"}
                     </button>
                   </div>
                 </motion.div>

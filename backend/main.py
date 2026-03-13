@@ -27,7 +27,6 @@ from backend.auth.database import init_db, get_db
 from backend.db.connection import close_pools, get_central_db
 from backend.projects.database import insert_project as _create_default_project
 from backend.conversations import ConversationService
-from backend.articles import articles_router
 from backend.projects import projects_router
 from backend.documents import documents_router
 
@@ -54,8 +53,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount article publishing routes
-app.include_router(articles_router)
 app.include_router(projects_router)
 app.include_router(documents_router)
 
@@ -85,7 +82,7 @@ async def startup():
             await _create_default_project(
                 slug="uncategorized",
                 title="Uncategorized",
-                description="Default project for unsorted articles and documents",
+                description="Default project for unsorted documents",
                 user_id=1,
             )
     finally:

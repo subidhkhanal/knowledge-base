@@ -21,26 +21,6 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_projects_slug ON projects(slug);
 
-CREATE TABLE IF NOT EXISTS articles (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    slug TEXT NOT NULL,
-    title TEXT NOT NULL,
-    tags_json TEXT DEFAULT '[]',
-    source TEXT NOT NULL,
-    content_markdown TEXT NOT NULL,
-    content_html TEXT,
-    project_id INTEGER REFERENCES projects(id),
-    chunks_count INTEGER DEFAULT 0,
-    conversation_length INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, slug)
-);
-CREATE INDEX IF NOT EXISTS idx_articles_user ON articles(user_id);
-CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
-CREATE INDEX IF NOT EXISTS idx_articles_project ON articles(project_id);
-
 CREATE TABLE IF NOT EXISTS documents (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),

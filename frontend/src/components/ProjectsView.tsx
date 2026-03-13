@@ -288,7 +288,7 @@ export function ProjectsView() {
               className="mb-4 text-xs"
               style={{ color: "var(--text-tertiary)" }}
             >
-              Create a project to organize your articles and documents
+              Create a project to organize your documents
             </p>
             <button
               onClick={() => setShowCreateForm(true)}
@@ -402,8 +402,6 @@ export function ProjectsView() {
                     className="flex items-center gap-3 text-xs"
                     style={{ color: "var(--text-tertiary)" }}
                   >
-                    <span>{project.article_count} {project.article_count === 1 ? "article" : "articles"}</span>
-                    <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
                     <span>{project.document_count} {project.document_count === 1 ? "document" : "documents"}</span>
                     <span className="h-0.5 w-0.5 rounded-full" style={{ background: "var(--text-tertiary)" }} />
                     <span>{formatRelativeDate(project.updated_at)}</span>
@@ -449,7 +447,7 @@ export function ProjectsView() {
                   className="mb-5 text-sm leading-relaxed"
                   style={{ color: "var(--text-secondary)" }}
                 >
-                  Are you sure you want to delete &ldquo;{projects.find((p) => p.slug === deletingSlug)?.title}&rdquo;? Articles will be unlinked but not deleted.
+                  Are you sure you want to delete &ldquo;{projects.find((p) => p.slug === deletingSlug)?.title}&rdquo;? All documents in this project will be removed.
                 </p>
                 <div className="flex justify-end gap-2">
                   <button

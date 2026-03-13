@@ -24,11 +24,9 @@ class ProjectResponse(BaseModel):
     description: str
     created_at: str
     updated_at: str
-    article_count: int = 0
     document_count: int = 0
 
 
 class ProjectDetailResponse(ProjectResponse):
-    """Project detail with articles and documents."""
-    articles: List[dict] = []
+    """Project detail with documents."""
     documents: List[dict] = []

@@ -31,10 +31,6 @@ function getPillPlaceholder(pathname: string): string {
   // /projects
   if (pathname === "/projects") return "Ask about all projects...";
 
-  // /projects/[slug]/articles/[articleSlug]
-  const articleMatch = pathname.match(/^\/projects\/[^/]+\/articles\/([^/]+)/);
-  if (articleMatch) return `Ask about ${formatSlug(articleMatch[1])}...`;
-
   // /projects/[slug]/documents/[docId]
   const docMatch = pathname.match(/^\/projects\/[^/]+\/documents\/[^/]+/);
   if (docMatch) return "Ask about this document...";

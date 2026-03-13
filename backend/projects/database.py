@@ -29,7 +29,6 @@ async def get_all_projects(user_id: int) -> List[Dict[str, Any]]:
     try:
         rows = await db.fetch_all(
             """SELECT p.id, p.slug, p.title, p.description, p.created_at, p.updated_at,
-                      (SELECT COUNT(*) FROM articles a WHERE a.project_id = p.id) as article_count,
                       (SELECT COUNT(*) FROM documents d WHERE d.project_id = p.id) as document_count
                FROM projects p
                WHERE p.user_id = $1
@@ -44,7 +43,6 @@ async def get_all_projects(user_id: int) -> List[Dict[str, Any]]:
                 "description": r["description"],
                 "created_at": str(r["created_at"]),
                 "updated_at": str(r["updated_at"]),
-                "article_count": r["article_count"],
                 "document_count": r["document_count"],
             }
             for r in rows
@@ -116,11 +114,6 @@ async def delete_project(slug: str, user_id: int) -> Optional[int]:
             return None
         project_id = row["id"]
 
-        # Unlink articles from this project
-        await db.execute(
-            "UPDATE articles SET project_id = NULL WHERE project_id = $1 AND user_id = $2",
-            project_id, user_id,
-        )
         # Delete documents belonging to this project
         await db.execute(
             "DELETE FROM documents WHERE project_id = $1 AND user_id = $2",

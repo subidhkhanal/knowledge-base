@@ -39,21 +39,10 @@ export interface ProjectListItem {
   description: string;
   created_at: string;
   updated_at: string;
-  article_count: number;
   document_count: number;
 }
 
 export interface ProjectDetail extends ProjectListItem {
-  articles: Array<{
-    slug: string;
-    title: string;
-    tags: string[];
-    source: string;
-    chunks_count: number;
-    conversation_length: number;
-    created_at: string;
-    updated_at: string;
-  }>;
   documents: Array<{
     source: string;
     source_type: string;
@@ -88,33 +77,6 @@ export function useProject(slug: string) {
     error: error ? "Failed to connect to the server" : null,
     refetch,
   };
-}
-
-export function useDeleteArticle() {
-  const { apiFetch } = useApi();
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const deleteArticle = useCallback(
-    async (slug: string) => {
-      setIsDeleting(true);
-      try {
-        const res = await apiFetch(`/api/articles/${encodeURIComponent(slug)}`, {
-          method: "DELETE",
-        });
-        if (res.ok) {
-          await mutate((key: string) => typeof key === "string" && key.startsWith("/api/projects/"), undefined, { revalidate: true });
-          return await res.json();
-        }
-        const data = await res.json();
-        throw new Error(data.detail || "Failed to delete article");
-      } finally {
-        setIsDeleting(false);
-      }
-    },
-    [apiFetch]
-  );
-
-  return { deleteArticle, isDeleting };
 }
 
 export function useDeleteDocument() {

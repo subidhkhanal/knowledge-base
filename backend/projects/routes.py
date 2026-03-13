@@ -9,7 +9,6 @@ from typing import Optional, List
 from backend.auth import get_current_user
 from backend.projects.models import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectDetailResponse
 from backend.projects import database as db
-from backend.articles import database as articles_db
 from backend.documents import database as documents_db
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -58,7 +57,6 @@ async def create_project(
         description=project["description"],
         created_at=project["created_at"],
         updated_at=project["updated_at"],
-        article_count=0,
         document_count=0,
     )
 
@@ -83,14 +81,11 @@ async def get_project_detail(
     slug: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get a project with its articles and documents."""
+    """Get a project with its documents."""
     user_id = current_user["user_id"]
     project = await db.get_project_by_slug(slug, user_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-
-    # Get articles for this project
-    articles = await articles_db.get_articles_by_project(project["id"], user_id=user_id)
 
     # Get documents from Pinecone tagged with this project
     components = _get_components()
@@ -100,7 +95,7 @@ async def get_project_detail(
     try:
         all_sources = components["vector_store"].get_all_sources(user_id=user_id_str)
         for source in all_sources:
-            if source.get("source_type") != "article" and source.get("project_id") == project["id"]:
+            if source.get("project_id") == project["id"]:
                 documents.append(source)
     except Exception:
         pass
@@ -124,9 +119,7 @@ async def get_project_detail(
 
     return {
         **project,
-        "articles": articles,
         "documents": documents,
-        "article_count": len(articles),
         "document_count": len(documents),
     }
 
@@ -164,7 +157,7 @@ async def delete_project(
     slug: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Delete a project and unlink its articles."""
+    """Delete a project and its documents."""
     user_id = current_user["user_id"]
     project_id = await db.delete_project(slug, user_id)
     if project_id is None:
@@ -198,9 +191,8 @@ async def project_scoped_query(
     project_id = project["id"]
     components = _get_components()
 
-    project_articles = await articles_db.get_articles_by_project(project_id, user_id=user_id)
     project_documents = await documents_db.get_documents_by_project(project_id, user_id=user_id)
-    source_names = [a["title"] for a in project_articles] + [d["filename"] for d in project_documents]
+    source_names = [d["filename"] for d in project_documents]
 
     async def event_stream():
         yield f"data: {json.dumps({'type': 'status', 'content': 'thinking'})}\n\n"
