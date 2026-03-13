@@ -7,12 +7,6 @@ import { Header } from "@/components/Header";
 import { useDocument } from "@/hooks/useDocument";
 
 const EbookViewer = dynamic(() => import("@/components/readers/EbookViewer"), { ssr: false });
-const PdfViewer = dynamic(() => import("@/components/readers/PdfViewer"), { ssr: false });
-const TextViewer = dynamic(() => import("@/components/readers/TextViewer"), { ssr: false });
-
-const EBOOK_EXTENSIONS = [".epub", ".mobi", ".azw", ".azw3", ".fb2", ".cbz"];
-const PDF_EXTENSIONS = [".pdf"];
-const TEXT_EXTENSIONS = [".txt", ".md", ".markdown", ".html", ".htm", ".docx", ".doc"];
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -24,11 +18,6 @@ function formatDate(dateStr: string): string {
 
 function DocumentReaderContent({ slug, id }: { slug: string; id: number }) {
   const { document, isLoading, error } = useDocument(id);
-
-  const ext = document?.extension || "";
-  const isEbook = EBOOK_EXTENSIONS.includes(ext);
-  const isPdf = PDF_EXTENSIONS.includes(ext);
-  const isText = TEXT_EXTENSIONS.includes(ext);
 
   return (
     <div
@@ -138,48 +127,13 @@ function DocumentReaderContent({ slug, id }: { slug: string; id: number }) {
               style={{ border: "none", borderTop: "1px solid var(--border)" }}
             />
 
-            {/* Viewer */}
-            {isEbook && (
-              <div
-                className="h-[70vh] rounded-xl overflow-hidden"
-                style={{ border: "1px solid var(--border)" }}
-              >
-                <EbookViewer documentId={id} />
-              </div>
-            )}
-
-            {isPdf && (
-              <div
-                className="h-[70vh] rounded-xl overflow-hidden"
-                style={{ border: "1px solid var(--border)" }}
-              >
-                <PdfViewer documentId={id} />
-              </div>
-            )}
-
-            {isText && <TextViewer documentId={id} filename={document.filename} />}
-
-            {!isEbook && !isPdf && !isText && (
-              <div className="flex flex-col items-center py-16 text-center">
-                <svg
-                  className="h-12 w-12 mb-3"
-                  style={{ color: "var(--text-tertiary)" }}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  No viewer available for {ext} files
-                </p>
-              </div>
-            )}
+            {/* EPUB Viewer */}
+            <div
+              className="h-[70vh] rounded-xl overflow-hidden"
+              style={{ border: "1px solid var(--border)" }}
+            >
+              <EbookViewer documentId={id} />
+            </div>
           </article>
         )}
       </main>

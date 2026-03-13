@@ -157,7 +157,7 @@ export function UploadModal({ onClose, onUpload, defaultProjectId = null }: Uplo
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.epub,.docx,.doc,.html,.htm,.txt,.md,.markdown"
+              accept=".epub"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) setSelectedFile(file);

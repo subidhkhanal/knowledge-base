@@ -12,8 +12,7 @@ import { ToastContainer } from "@/components/Toast";
 import { UploadModal } from "@/components/UploadModal";
 
 const sourceConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pdf: { label: "PDF", color: "#ef4444", bg: "rgba(239, 68, 68, 0.1)" },
-  document: { label: "Document", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
+  epub: { label: "EPUB", color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
 };
 
 function getSourceInfo(source: string) {
@@ -181,7 +180,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                 {project.documents.length > 0 && (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {project.documents.map((doc, index) => {
-                      const src = getSourceInfo(doc.source_type === "pdf" ? "pdf" : "document");
+                      const src = getSourceInfo(doc.source_type || "epub");
                       return (
                         <motion.div
                           key={`doc-${doc.document_id ?? doc.source}`}

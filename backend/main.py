@@ -9,10 +9,8 @@ import time
 import uvicorn
 
 from backend.ingestion import (
-    PDFProcessor, Chunker, RecursiveChunker, TextProcessor,
+    Chunker, RecursiveChunker,
     EPUBProcessor, is_ebooklib_available,
-    DOCXProcessor, is_docx_available,
-    HTMLProcessor, is_html_available
 )
 from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
@@ -97,11 +95,7 @@ async def shutdown():
 
 
 # Lazy-load heavy components to speed up startup
-pdf_processor = None
-text_processor = None
 epub_processor = None
-docx_processor = None
-html_processor = None
 chunker = None
 vector_store = None
 query_engine = None
@@ -111,24 +105,17 @@ bm25_index = None
 
 
 def get_components():
-    global pdf_processor, text_processor, epub_processor, docx_processor, html_processor
+    global epub_processor
     global chunker, vector_store, query_engine, query_router, route_handlers, bm25_index
 
-    # Initialize basic processors first (these don't require external APIs)
-    if pdf_processor is None:
-        pdf_processor = PDFProcessor()
-        text_processor = TextProcessor()
+    # Initialize EPUB processor and chunker
+    if epub_processor is None:
         if CHUNKING_METHOD == "recursive":
             chunker = RecursiveChunker()
         else:
             chunker = Chunker()
-        # Initialize optional processors if available
         if is_ebooklib_available():
             epub_processor = EPUBProcessor()
-        if is_docx_available():
-            docx_processor = DOCXProcessor()
-        if is_html_available():
-            html_processor = HTMLProcessor()
 
     # Initialize BM25 index for hybrid retrieval
     if bm25_index is None and USE_HYBRID_RETRIEVAL:
@@ -158,11 +145,7 @@ def get_components():
         )
 
     return {
-        "pdf": pdf_processor,
-        "text": text_processor,
         "epub": epub_processor,
-        "docx": docx_processor,
-        "html": html_processor,
         "chunker": chunker,
         "vector_store": vector_store,
         "query_engine": query_engine,
@@ -180,11 +163,6 @@ class QueryRequest(BaseModel):
     source_filter: Optional[str] = None
     chat_history: Optional[List[dict]] = None
     conversation_id: Optional[int] = None
-
-
-class TextUploadRequest(BaseModel):
-    content: str
-    title: str = "Untitled Note"
 
 
 class QueryResponse(BaseModel):
@@ -227,8 +205,7 @@ async def root():
         "supported_formats": list(SUPPORTED_EXTENSIONS.keys()),
         "endpoints": {
             "health": "GET /health",
-            "upload_document": "POST /api/upload/document (PDF, EPUB, DOCX, HTML, TXT, MD)",
-            "upload_text": "POST /api/upload/text",
+            "upload_document": "POST /api/upload/document (EPUB)",
             "query": "POST /api/query",
             "sources": "GET /api/sources",
             "delete_source": "DELETE /api/sources/{source_name}",
@@ -239,15 +216,7 @@ async def root():
 
 # Supported file extensions and their processors
 SUPPORTED_EXTENSIONS = {
-    ".pdf": "pdf",
     ".epub": "epub",
-    ".docx": "docx",
-    ".doc": "docx",  # Will work for .docx only, not legacy .doc
-    ".html": "html",
-    ".htm": "html",
-    ".txt": "text",
-    ".md": "text",
-    ".markdown": "text",
 }
 
 
@@ -354,15 +323,7 @@ async def upload_document(
     from backend.storage.supabase_storage import upload_file as upload_to_supabase
 
     MIME_MAP = {
-        ".pdf": "application/pdf",
         ".epub": "application/epub+zip",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ".doc": "application/msword",
-        ".html": "text/html",
-        ".htm": "text/html",
-        ".txt": "text/plain",
-        ".md": "text/markdown",
-        ".markdown": "text/markdown",
     }
 
     storage_key = f"{_uuid.uuid4().hex}{ext}"
@@ -386,77 +347,6 @@ async def upload_document(
         source=file.filename,
         chunks_created=len(chunks),
         document_id=doc_id,
-    )
-
-
-@app.post("/api/upload/text", response_model=UploadResponse)
-async def upload_text(
-    request: TextUploadRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    """Upload direct text content."""
-    if not request.content.strip():
-        raise HTTPException(status_code=400, detail="Content cannot be empty")
-
-    # Check content size
-    if len(request.content.encode('utf-8')) > MAX_UPLOAD_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Content too large. Maximum size is {MAX_UPLOAD_SIZE_MB} MB."
-        )
-
-    components = get_components()
-
-    # Process text
-    documents = components["text"].process_text(request.content, request.title)
-
-    # Chunk the documents
-    try:
-        chunks = components["chunker"].chunk_documents(documents)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Text processing failed: {str(e)}. Check for invalid characters in your content."
-        )
-
-    if not chunks:
-        raise HTTPException(
-            status_code=400,
-            detail="Text is too short (minimum ~100 words needed for meaningful search)."
-        )
-
-    # Store in vector database
-    try:
-        user_id_str = str(current_user["user_id"])
-        doc_ids = components["vector_store"].add_documents(chunks, user_id=user_id_str)
-    except Exception as e:
-        error_msg = str(e).lower()
-        if "api" in error_msg or "key" in error_msg or "unauthorized" in error_msg:
-            detail = "Vector database authentication failed. Check your PINECONE_API_KEY and COHERE_API_KEY."
-        elif "timeout" in error_msg or "connection" in error_msg:
-            detail = "Could not connect to vector database. Check your internet connection and try again."
-        elif "quota" in error_msg or "limit" in error_msg or "rate" in error_msg:
-            detail = "API rate limit reached. Wait a moment and try again with less content."
-        else:
-            detail = f"Failed to store text: {str(e)}"
-        raise HTTPException(status_code=503, detail=detail)
-
-    # Update BM25 index for hybrid retrieval
-    if bm25_index is not None:
-        bm25_items = []
-        for chunk, doc_id in zip(chunks, doc_ids):
-            bm25_items.append({
-                "text": chunk["text"],
-                "id": doc_id,
-                "metadata": {"source": chunk.get("source", "unknown"), "source_type": chunk.get("source_type", "unknown"), "user_id": user_id_str}
-            })
-        bm25_index.add_chunks(bm25_items)
-        bm25_index.save()
-
-    return UploadResponse(
-        message="Text processed successfully",
-        source=request.title,
-        chunks_created=len(chunks)
     )
 
 
@@ -704,8 +594,6 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
         "total_chunks": total_chunks,
         "supported_formats": list(SUPPORTED_EXTENSIONS.keys()),
         "epub_available": is_ebooklib_available(),
-        "docx_available": is_docx_available(),
-        "html_available": is_html_available()
     }
 
 
