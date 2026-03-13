@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Optional, AsyncGenerator
-from groq import Groq
+from langchain_groq import ChatGroq
+from langchain_core.messages import SystemMessage, HumanMessage
 from backend.config import GROQ_API_KEY, GROQ_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS, SYSTEM_PROMPT
 from backend.routing.query_router import RouteType
 
@@ -19,47 +20,40 @@ class RouteHandlers:
         self.vector_store = vector_store
         self.query_engine = query_engine
         key = groq_api_key or GROQ_API_KEY
-        self.groq_client = Groq(api_key=key) if key else None
-        self.model = GROQ_MODEL
+        self.llm = ChatGroq(
+            model=GROQ_MODEL,
+            api_key=key,
+            temperature=LLM_TEMPERATURE,
+            max_tokens=LLM_MAX_TOKENS,
+        ) if key else None
 
     def _call_llm(self, system_prompt: str, user_message: str) -> Optional[str]:
         """Make a direct LLM call without RAG."""
-        if not self.groq_client:
+        if not self.llm:
             return None
 
         try:
-            response = self.groq_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                temperature=LLM_TEMPERATURE,
-                max_tokens=LLM_MAX_TOKENS
-            )
-            return response.choices[0].message.content
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_message),
+            ]
+            response = self.llm.invoke(messages)
+            return response.content
         except Exception:
             return None
 
-    def _call_llm_stream(self, system_prompt: str, user_message: str):
-        """Make a streaming LLM call, yielding tokens."""
-        if not self.groq_client:
+    async def _call_llm_stream(self, system_prompt: str, user_message: str):
+        """Make an async streaming LLM call, yielding tokens."""
+        if not self.llm:
             return
 
-        response = self.groq_client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
-            temperature=LLM_TEMPERATURE,
-            max_tokens=LLM_MAX_TOKENS,
-            stream=True
-        )
-        for chunk in response:
-            token = chunk.choices[0].delta.content
-            if token:
-                yield token
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_message),
+        ]
+        async for chunk in self.llm.astream(messages):
+            if chunk.content:
+                yield chunk.content
 
     def _extract_sources(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Extract source information from retrieved chunks."""
@@ -242,7 +236,7 @@ If the user seems to want help, mention that you can answer questions about thei
         )
 
         # If we got chunks, enhance the response with summary-specific prompt
-        if result.get("chunks_used", 0) > 0 and self.groq_client:
+        if result.get("chunks_used", 0) > 0 and self.llm:
             system_prompt = """You are a summarization assistant for a personal document library. Based on the provided context passages, create a clear and structured summary.
 
 Rules:
@@ -294,7 +288,7 @@ Rules:
         )
 
         # If we got chunks, enhance with comparison-specific prompt
-        if result.get("chunks_used", 0) > 0 and self.groq_client:
+        if result.get("chunks_used", 0) > 0 and self.llm:
             system_prompt = """You are a comparison assistant for a personal document library. Based on the provided context passages, create a clear and structured comparison.
 
 Rules:
@@ -459,7 +453,7 @@ Respond warmly to greetings and casual conversation.
 Keep responses brief and helpful.
 If the user seems to want help, mention that you can answer questions about their uploaded documents."""
             try:
-                for token in self._call_llm_stream(system_prompt, query):
+                async for token in self._call_llm_stream(system_prompt, query):
                     yield {"type": "token", "content": token}
             except Exception:
                 yield {"type": "token", "content": "Hello! I'm your personal knowledge base assistant. Feel free to ask me questions about your uploaded documents!"}
@@ -552,7 +546,7 @@ Rules:
 
         # Stream the LLM response
         try:
-            for token in self._call_llm_stream(system_prompt, user_message):
+            async for token in self._call_llm_stream(system_prompt, user_message):
                 yield {"type": "token", "content": token}
         except Exception:
             yield {"type": "token", "content": "I'm unable to generate a response. Please check your API keys."}

@@ -1,14 +1,13 @@
 from typing import List, Dict, Any, Optional
 import uuid
-import cohere
+from langchain_cohere import CohereEmbeddings
 from pinecone import Pinecone, ServerlessSpec
 from backend.config import (
     TOP_K, SIMILARITY_THRESHOLD, PINECONE_API_KEY, PINECONE_INDEX_NAME,
-    COHERE_API_KEY, COHERE_EMBED_MODEL, COHERE_EMBED_DIMENSION, API_TIMEOUT
+    COHERE_API_KEY, COHERE_EMBED_MODEL, COHERE_EMBED_DIMENSION
 )
 
 # API batch size limits
-COHERE_EMBED_BATCH_SIZE = 96  # Cohere API limit per request
 PINECONE_UPSERT_BATCH_SIZE = 100  # Pinecone recommended batch size
 PINECONE_DELETE_BATCH_SIZE = 100  # Pinecone delete batch size
 
@@ -35,9 +34,11 @@ class VectorStore:
         # Initialize Pinecone
         self.pc = Pinecone(api_key=PINECONE_API_KEY)
 
-        # Initialize Cohere for embeddings with timeout
-        self.cohere_client = cohere.Client(COHERE_API_KEY, timeout=API_TIMEOUT)
-        self.embed_model = COHERE_EMBED_MODEL
+        # Initialize LangChain Cohere embeddings
+        self.embeddings = CohereEmbeddings(
+            model=COHERE_EMBED_MODEL,
+            cohere_api_key=COHERE_API_KEY,
+        )
 
         # Create index if it doesn't exist
         if PINECONE_INDEX_NAME not in self.pc.list_indexes().names():
@@ -55,32 +56,14 @@ class VectorStore:
         self.index = self.pc.Index(PINECONE_INDEX_NAME)
 
     def _get_query_embedding(self, text: str) -> List[float]:
-        """Get embedding for a query using Cohere."""
-        response = self.cohere_client.embed(
-            texts=[text],
-            model=self.embed_model,
-            input_type="search_query"
-        )
-        return response.embeddings[0]
+        """Get embedding for a query using LangChain CohereEmbeddings."""
+        return self.embeddings.embed_query(text)
 
     def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings for multiple texts using Cohere."""
+        """Get embeddings for multiple texts using LangChain CohereEmbeddings."""
         if not texts:
             return []
-
-        batch_size = COHERE_EMBED_BATCH_SIZE
-        all_embeddings = []
-
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            response = self.cohere_client.embed(
-                texts=batch,
-                model=self.embed_model,
-                input_type="search_document"
-            )
-            all_embeddings.extend(response.embeddings)
-
-        return all_embeddings
+        return self.embeddings.embed_documents(texts)
 
     def add_documents(self, documents: List[Dict[str, Any]], user_id: Optional[str] = None) -> List[str]:
         """

@@ -1,7 +1,6 @@
-import asyncio
-import queue
 from typing import List, Dict, Any, Optional, AsyncGenerator
-from groq import Groq
+from langchain_groq import ChatGroq
+from langchain_core.messages import SystemMessage, HumanMessage
 from langsmith import traceable
 from backend.config import (
     GROQ_API_KEY, GROQ_MODEL,
@@ -11,12 +10,16 @@ from backend.config import (
 
 
 class LLMReasoning:
-    """LLM integration for RAG responses using Groq."""
+    """LLM integration for RAG responses using LangChain ChatGroq."""
 
     def __init__(self, groq_api_key: Optional[str] = None):
         key = groq_api_key or GROQ_API_KEY
-        self.groq_client = Groq(api_key=key) if key else None
-        self.groq_model = GROQ_MODEL
+        self.llm = ChatGroq(
+            model=GROQ_MODEL,
+            api_key=key,
+            temperature=LLM_TEMPERATURE,
+            max_tokens=LLM_MAX_TOKENS,
+        ) if key else None
 
     def _format_context(self, chunks: List[Dict[str, Any]]) -> str:
         """Format retrieved chunks into context string."""
@@ -81,45 +84,21 @@ Answer the question based on the context above. Do NOT include source citations 
 
     @traceable(name="groq_rag_generate")
     def _call_groq(self, prompt: str) -> Optional[str]:
-        """Call Groq API."""
-        if not self.groq_client:
+        """Call Groq API via LangChain."""
+        if not self.llm:
             return None
 
         try:
-            response = self.groq_client.chat.completions.create(
-                model=self.groq_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=LLM_TEMPERATURE,
-                max_tokens=LLM_MAX_TOKENS
-            )
-            return response.choices[0].message.content
+            messages = [
+                SystemMessage(content=SYSTEM_PROMPT),
+                HumanMessage(content=prompt),
+            ]
+            response = self.llm.invoke(messages)
+            return response.content
         except Exception:
             return None
 
     @traceable(name="groq_rag_stream")
-    def _call_groq_stream(self, prompt: str):
-        """Call Groq API with streaming, yielding tokens."""
-        if not self.groq_client:
-            return
-
-        response = self.groq_client.chat.completions.create(
-            model=self.groq_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=LLM_TEMPERATURE,
-            max_tokens=LLM_MAX_TOKENS,
-            stream=True
-        )
-        for chunk in response:
-            token = chunk.choices[0].delta.content
-            if token:
-                yield token
-
     async def generate_response_stream(
         self,
         query: str,
@@ -131,31 +110,25 @@ Answer the question based on the context above. Do NOT include source citations 
             yield {"type": "done", "sources": [], "chunks_used": 0, "provider": None}
             return
 
+        if not self.llm:
+            yield {"type": "token", "content": "I'm unable to generate a response. Please check your API keys."}
+            yield {"type": "done", "sources": [], "chunks_used": 0, "provider": None}
+            return
+
         context = self._format_context(chunks)
         prompt = self._build_prompt(query, context)
 
-        # Run sync Groq stream in a thread to avoid blocking the event loop,
-        # which would prevent FastAPI from flushing SSE chunks in real-time.
-        token_queue: queue.Queue = queue.Queue()
+        messages = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
 
-        def _run_sync_stream():
-            try:
-                for token in self._call_groq_stream(prompt):
-                    token_queue.put({"type": "token", "content": token})
-            except Exception:
-                token_queue.put({"type": "token", "content": "I'm unable to generate a response. Please check your API keys."})
-            token_queue.put(None)  # sentinel to signal completion
-
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, _run_sync_stream)
-
-        while True:
-            while token_queue.empty():
-                await asyncio.sleep(0.01)
-            item = token_queue.get()
-            if item is None:
-                break
-            yield item
+        try:
+            async for chunk in self.llm.astream(messages):
+                if chunk.content:
+                    yield {"type": "token", "content": chunk.content}
+        except Exception:
+            yield {"type": "token", "content": "I'm unable to generate a response. Please check your API keys."}
 
         yield {
             "type": "done",
@@ -169,16 +142,7 @@ Answer the question based on the context above. Do NOT include source citations 
         query: str,
         chunks: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """
-        Generate a response using retrieved chunks.
-
-        Args:
-            query: User's question
-            chunks: Retrieved document chunks
-
-        Returns:
-            Dict with 'answer', 'sources', and 'provider'
-        """
+        """Generate a response using retrieved chunks."""
         if not chunks:
             return self._empty_response()
 

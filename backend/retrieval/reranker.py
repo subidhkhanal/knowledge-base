@@ -1,18 +1,23 @@
-from typing import List, Dict, Any, Optional
-import cohere
-from backend.config import COHERE_API_KEY, RERANK_MODEL, RERANK_TOP_K, API_TIMEOUT
+from typing import List, Dict, Any
+from langchain_cohere import CohereRerank
+from langchain_core.documents import Document
+from backend.config import COHERE_API_KEY, RERANK_MODEL, RERANK_TOP_K
 
 
 class Reranker:
     """Cohere-based reranker for improving retrieval quality."""
 
     def __init__(self):
-        self.client = None
+        self.reranker = None
         self.available = False
 
         if COHERE_API_KEY:
             try:
-                self.client = cohere.Client(COHERE_API_KEY, timeout=API_TIMEOUT)
+                self.reranker = CohereRerank(
+                    model=RERANK_MODEL,
+                    cohere_api_key=COHERE_API_KEY,
+                    top_n=RERANK_TOP_K,
+                )
                 self.available = True
             except Exception:
                 # Silently fail - reranking is optional, search will still work
@@ -39,23 +44,25 @@ class Reranker:
             return documents[:top_k]
 
         try:
-            # Extract text from documents for reranking
-            doc_texts = [doc["text"] for doc in documents]
+            # Build LangChain Document objects with index metadata
+            lc_docs = [
+                Document(page_content=doc["text"], metadata={"_index": i, **doc.get("metadata", {})})
+                for i, doc in enumerate(documents)
+            ]
 
-            # Call Cohere rerank API
-            response = self.client.rerank(
-                model=RERANK_MODEL,
-                query=query,
-                documents=doc_texts,
-                top_n=min(top_k, len(documents))
-            )
+            # Update top_n for this call if different from default
+            self.reranker.top_n = min(top_k, len(documents))
 
-            # Reorder documents based on rerank results
+            # Call Cohere rerank via LangChain
+            reranked = self.reranker.compress_documents(lc_docs, query)
+
+            # Map back to original format
             reranked_docs = []
-            for result in response.results:
-                doc = documents[result.index].copy()
-                doc["rerank_score"] = result.relevance_score
-                doc["original_rank"] = result.index
+            for result in reranked:
+                original_index = result.metadata.get("_index", 0)
+                doc = documents[original_index].copy()
+                doc["rerank_score"] = result.metadata.get("relevance_score", 0)
+                doc["original_rank"] = original_index
                 reranked_docs.append(doc)
 
             return reranked_docs
