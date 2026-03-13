@@ -61,10 +61,6 @@ RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))  # Final number of results af
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-# Tavily search API (free tier: 1000 searches/month)
-# Get your free API key at https://tavily.com
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
-
 # LangSmith observability (free tier: 5K traces/month)
 # Get your API key at https://smith.langchain.com
 LANGSMITH_API_KEY = os.getenv("LANGSMITH_API_KEY", "")
