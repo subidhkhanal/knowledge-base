@@ -48,7 +48,7 @@ _cors_origins = list(dict.fromkeys([
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.(vercel\.app|up\.railway\.app)",
+    allow_origin_regex=r"https://.*\.(vercel\.app|up\.railway\.app|awsapprunner\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
