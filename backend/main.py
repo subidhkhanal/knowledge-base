@@ -1,12 +1,13 @@
 import os
+import json
+import time
+import logging
+import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
-import json
-import time
-import uvicorn
 
 from backend.ingestion import (
     Chunker, RecursiveChunker,
@@ -537,7 +538,19 @@ async def delete_document(
             doc["filename"], user_id=user_id_str
         )
     except Exception:
-        pass  # Best effort — vectors may already be gone
+        logging.exception(
+            "Pinecone delete failed for source=%r user_id=%s",
+            doc["filename"], user_id_str,
+        )
+
+    # Clean up BM25 hybrid-retrieval index so deleted chunks stop showing up in queries
+    bm25 = components.get("bm25_index")
+    if bm25 is not None:
+        try:
+            bm25.remove_by_source(doc["filename"], user_id=user_id_str)
+            bm25.save()
+        except Exception:
+            logging.exception("BM25 cleanup failed for %r", doc["filename"])
 
     return {
         "success": True,
