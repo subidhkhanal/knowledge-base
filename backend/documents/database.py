@@ -6,7 +6,6 @@ from backend.db.connection import get_central_db
 
 async def insert_document(
     filename: str,
-    storage_path: str,
     extension: str,
     size_bytes: int,
     mime_type: str,
@@ -18,9 +17,9 @@ async def insert_document(
     try:
         result = await db.execute(
             """INSERT INTO documents
-               (user_id, filename, storage_path, extension, size_bytes, mime_type, project_id)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-            user_id, filename, storage_path, extension, size_bytes, mime_type, project_id,
+               (user_id, filename, extension, size_bytes, mime_type, project_id)
+               VALUES ($1, $2, $3, $4, $5, $6)""",
+            user_id, filename, extension, size_bytes, mime_type, project_id,
         )
         return result.lastrowid
     finally:
@@ -39,7 +38,6 @@ async def get_document_by_id(doc_id: int, user_id: int) -> Optional[Dict[str, An
         return {
             "id": row["id"],
             "filename": row["filename"],
-            "storage_path": row["storage_path"],
             "extension": row["extension"],
             "size_bytes": row["size_bytes"],
             "mime_type": row["mime_type"],

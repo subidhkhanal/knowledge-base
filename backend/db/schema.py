@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS documents (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),
     filename TEXT NOT NULL,
-    storage_path TEXT NOT NULL,
     extension TEXT NOT NULL,
     size_bytes INTEGER NOT NULL,
     mime_type TEXT NOT NULL,

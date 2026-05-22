@@ -149,7 +149,7 @@ export function UploadModal({ onClose, onUpload, defaultProjectId = null }: Uplo
                     Click to select a file
                   </p>
                   <p className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>
-                    PDF, EPUB, DOCX, HTML, TXT, Markdown
+                    EPUB
                   </p>
                 </>
               )}

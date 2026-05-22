@@ -26,7 +26,6 @@ from backend.db.connection import close_pools, get_central_db
 from backend.projects.database import insert_project as _create_default_project
 from backend.conversations import ConversationService
 from backend.projects import projects_router
-from backend.documents import documents_router
 
 app = FastAPI(
     title="Personal Knowledge Base API",
@@ -52,7 +51,6 @@ app.add_middleware(
 )
 
 app.include_router(projects_router)
-app.include_router(documents_router)
 
 
 
@@ -317,24 +315,16 @@ async def upload_document(
         bm25_index.add_chunks(bm25_items)
         bm25_index.save()
 
-    # Save original file to Supabase Storage for the document reader
-    import uuid as _uuid
     from backend.documents.database import insert_document
-    from backend.storage.supabase_storage import upload_file as upload_to_supabase
 
     MIME_MAP = {
         ".epub": "application/epub+zip",
     }
-
-    storage_key = f"{_uuid.uuid4().hex}{ext}"
     mime_type = MIME_MAP.get(ext, "application/octet-stream")
-    upload_to_supabase(storage_key, content, mime_type)
-    storage_path = storage_key  # store the Supabase key instead of a local path
 
     user_id_int = current_user["user_id"]
     doc_id = await insert_document(
         filename=file.filename,
-        storage_path=storage_path,
         extension=ext,
         size_bytes=len(content),
         mime_type=mime_type,
@@ -548,13 +538,6 @@ async def delete_document(
         )
     except Exception:
         pass  # Best effort — vectors may already be gone
-
-    # Delete file from Supabase Storage
-    try:
-        from backend.storage.supabase_storage import delete_file as delete_from_supabase
-        delete_from_supabase(doc["storage_path"])
-    except Exception:
-        pass  # Best effort — file may not exist
 
     return {
         "success": True,

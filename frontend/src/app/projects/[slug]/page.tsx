@@ -2,7 +2,6 @@
 
 import { use, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Header } from "@/components/Header";
 import { useProject, useDeleteDocument } from "@/hooks/useProjects";
@@ -28,7 +27,6 @@ function TrashIcon() {
 }
 
 function ProjectDetailContent({ slug }: { slug: string }) {
-  const router = useRouter();
   const { project, isLoading, error, refetch } = useProject(slug);
   const { toasts, addToast, removeToast, updateToast } = useToasts();
   const { uploadFile } = useUpload({ addToast, removeToast, updateToast });
@@ -191,7 +189,7 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                             ease: [0.16, 1, 0.3, 1],
                             delay: index * 0.05,
                           }}
-                          className={`group relative flex flex-col gap-3 rounded-xl p-4${doc.document_id ? " cursor-pointer" : ""}`}
+                          className="group relative flex flex-col gap-3 rounded-xl p-4"
                           style={{
                             background: "var(--bg-secondary)",
                             border: "1px solid var(--border)",
@@ -199,7 +197,6 @@ function ProjectDetailContent({ slug }: { slug: string }) {
                           }}
                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
-                          onClick={doc.document_id ? () => router.push(`/projects/${slug}/documents/${doc.document_id}`) : undefined}
                         >
                           {doc.document_id && (
                             <button

@@ -28,14 +28,8 @@ function formatSlug(slug: string): string {
 }
 
 function getPillPlaceholder(pathname: string): string {
-  // /projects
   if (pathname === "/projects") return "Ask about all projects...";
 
-  // /projects/[slug]/documents/[docId]
-  const docMatch = pathname.match(/^\/projects\/[^/]+\/documents\/[^/]+/);
-  if (docMatch) return "Ask about this document...";
-
-  // /projects/[slug]
   const projectMatch = pathname.match(/^\/projects\/([^/]+)/);
   if (projectMatch) return `Ask about ${formatSlug(projectMatch[1])}...`;
 

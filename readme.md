@@ -19,9 +19,9 @@ A full-stack RAG system that turns your documents into a searchable, queryable k
 │                                                                  │
 │  ┌─────────────┐   ┌──────────────────┐                        │
 │  │  Ingestion  │   │  RAG Pipeline    │                        │
-│  │  PDF/EPUB   │   │  Query Router    │                        │
-│  │  DOCX/HTML  │──►│  Hybrid Retriev. │                        │
-│  │  TXT/MD     │   │  Cohere Rerank   │                        │
+│  │  Ingestion  │   │  Query Router    │                        │
+│  │  EPUB       │──►│  Hybrid Retriev. │                        │
+│  │             │   │  Cohere Rerank   │                        │
 │  └─────────────┘   └──────────────────┘                        │
 └──────┬──────────────────────┬───────────────────────────────────┘
        │                      │
@@ -57,15 +57,7 @@ Retrieves the most relevant chunks from your knowledge base and grounds the LLM 
 
 ### Document Ingestion
 
-Upload files up to 10 MB in any of the supported formats:
-
-| Format | Processor | Notes |
-|--------|-----------|-------|
-| PDF | pdfplumber | Text + tables, per-page metadata |
-| EPUB | ebooklib | Chapter-level extraction |
-| DOCX | python-docx | Paragraphs + tables |
-| HTML | BeautifulSoup | Readable content extraction |
-| TXT / MD / Markdown | Built-in | Multi-encoding (UTF-8, latin-1, cp1252) |
+Upload EPUB files up to 10 MB. Chapter-level extraction via ebooklib.
 
 Processing pipeline: extract → recursive-chunk (800 tokens, 150 overlap) → embed (Cohere 1024-dim) → upsert to Pinecone + BM25 index → store metadata in PostgreSQL.
 
@@ -104,9 +96,9 @@ Group related documents into projects. RAG queries can be scoped to a single pro
 | Backend | FastAPI + Python 3.10+ | Async-native, SSE support, fast iteration |
 | Database | PostgreSQL via Supabase | Managed hosting, row-level security, file storage |
 | Vector Store | Pinecone | Serverless, metadata filtering, free 100K vectors |
-| Embeddings | Cohere `embed-english-v3.0` | 1024-dim, strong multilingual quality |
-| Reranking | Cohere `rerank-english-v3.0` | Cross-encoder precision on top of ANN recall |
-| LLM | Groq `llama-3.3-70b-versatile` | Free tier, 70B quality, fast inference |
+| Embeddings | LangChain + Cohere `embed-english-v3.0` | 1024-dim, strong multilingual quality |
+| Reranking | LangChain + Cohere `rerank-english-v3.0` | Cross-encoder precision on top of ANN recall |
+| LLM | LangChain + Groq `llama-3.3-70b-versatile` | Free tier, 70B quality, fast inference |
 | Sparse Retrieval | rank-bm25 | In-memory, zero-latency lexical search |
 | Query Routing | LangChain LCEL | Composable, typed routing chains |
 | Frontend | Next.js 16 + React 19 + Tailwind v4 | App Router, SWR caching, streaming |
@@ -239,8 +231,7 @@ The Next.js frontend deploys automatically on every push via Vercel's GitHub int
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/upload/document` | Upload file (PDF, EPUB, DOCX, HTML, TXT, MD) |
-| POST | `/api/upload/text` | Upload direct text content |
+| POST | `/api/upload/document` | Upload EPUB file |
 | GET | `/api/sources` | List all ingested sources |
 | GET | `/api/sources/{name}/content` | Get all chunks from a source |
 | DELETE | `/api/sources/{name}` | Delete source and its vectors |
@@ -293,11 +284,7 @@ personal-assistant/
 │   ├── conversations/
 │   │   └── routes.py         # Conversation and message persistence
 │   ├── ingestion/
-│   │   ├── pdf_processor.py
 │   │   ├── epub_processor.py
-│   │   ├── docx_processor.py
-│   │   ├── html_processor.py
-│   │   ├── text_processor.py
 │   │   ├── chunker.py        # Linear token chunker
 │   │   └── recursive_chunker.py
 │   ├── retrieval/
@@ -326,7 +313,6 @@ personal-assistant/
         │   ├── MessageBubble.tsx     # Markdown rendering + source citations
         │   ├── ProjectsView.tsx      # Project grid with create/delete
         │   ├── UploadModal.tsx       # File upload with drag-drop + progress
-        │   ├── PdfViewer.tsx         # PDF reader (dynamic import, no SSR)
         │   └── EbookViewer.tsx       # EPUB reader
         └── hooks/
             ├── useApi.ts             # Base fetch wrapper + XHR streaming

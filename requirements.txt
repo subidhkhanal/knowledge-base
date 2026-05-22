@@ -30,9 +30,6 @@ rank-bm25>=0.2.2
 # Database (PostgreSQL)
 asyncpg>=0.29.0
 
-# Supabase (Storage)
-supabase>=2.0.0
-
 # Observability (LangSmith tracing)
 langsmith>=0.1.0
 

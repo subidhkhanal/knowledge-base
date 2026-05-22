@@ -100,7 +100,7 @@ async def get_project_detail(
     except Exception:
         pass
 
-    # Enrich documents with document_id from DB for reader links
+    # Enrich documents with document_id from DB so the frontend can target delete actions
     sqlite_docs = await documents_db.get_documents_by_project(project["id"], user_id=user_id)
     doc_id_map = {d["filename"]: d["id"] for d in sqlite_docs}
     for doc in documents:
@@ -157,7 +157,7 @@ async def delete_project(
     slug: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Delete a project and its documents (DB + Pinecone vectors + Supabase files)."""
+    """Delete a project and its documents (DB rows + Pinecone vectors)."""
     user_id = current_user["user_id"]
     project = await db.get_project_by_slug(slug, user_id)
     if not project:
@@ -166,7 +166,7 @@ async def delete_project(
     # Fetch all documents before deleting DB records
     project_docs = await documents_db.get_documents_by_project(project["id"], user_id=user_id)
 
-    # Clean up Pinecone vectors and Supabase files for each document
+    # Clean up Pinecone vectors for each document
     components = _get_components()
     user_id_str = str(user_id)
     for doc in project_docs:
@@ -174,12 +174,6 @@ async def delete_project(
             components["vector_store"].delete_by_source(
                 doc["filename"], user_id=user_id_str
             )
-        except Exception:
-            pass  # Best effort
-
-        try:
-            from backend.storage.supabase_storage import delete_file as delete_from_supabase
-            delete_from_supabase(doc.get("storage_path"))
         except Exception:
             pass  # Best effort
 

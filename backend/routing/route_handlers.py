@@ -112,7 +112,7 @@ class RouteHandlers:
             answer = (
                 "You don't have any documents in your knowledge base yet. "
                 "You can upload documents using the upload endpoint. "
-                "Supported formats: PDF, EPUB, DOCX, HTML, TXT, and Markdown files."
+                "Supported formats: EPUB."
             )
         else:
             # Format document list
