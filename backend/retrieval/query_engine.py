@@ -2,19 +2,14 @@ from typing import Dict, Any, Optional, List
 from backend.storage.vector_store import VectorStore
 from backend.llm.reasoning import LLMReasoning
 from backend.retrieval.reranker import Reranker
-from backend.config import TOP_K, SIMILARITY_THRESHOLD, USE_RERANKING, RERANK_TOP_K, USE_HYBRID_RETRIEVAL
+from backend.config import TOP_K, SIMILARITY_THRESHOLD, USE_RERANKING, RERANK_TOP_K
 
 
 class QueryEngine:
     """RAG query engine combining retrieval, reranking, and LLM generation."""
 
-    def __init__(self, vector_store: VectorStore = None, bm25_index=None):
+    def __init__(self, vector_store: VectorStore = None):
         self.vector_store = vector_store or VectorStore()
-        self.bm25_index = bm25_index
-        self.hybrid_retriever = None
-        if USE_HYBRID_RETRIEVAL and bm25_index:
-            from backend.retrieval.hybrid_retriever import HybridRetriever
-            self.hybrid_retriever = HybridRetriever(self.vector_store, bm25_index)
         self.llm = LLMReasoning()
         self.reranker = Reranker()
 
@@ -31,23 +26,13 @@ class QueryEngine:
         # Get more chunks if reranking (reranker will filter down)
         retrieve_k = top_k * 2 if use_reranking and self.reranker.is_available() else top_k
 
-        # Use hybrid retrieval if available and BM25 index has data
-        if self.hybrid_retriever and not self.hybrid_retriever.bm25_index.is_empty:
-            chunks = self.hybrid_retriever.search(
-                query=question,
-                top_k=retrieve_k,
-                threshold=threshold,
-                source_filter=source_filter,
-                user_id=user_id
-            )
-        else:
-            chunks = self.vector_store.search(
-                query=question,
-                top_k=retrieve_k,
-                threshold=threshold,
-                source_filter=source_filter,
-                user_id=user_id
-            )
+        chunks = self.vector_store.search(
+            query=question,
+            top_k=retrieve_k,
+            threshold=threshold,
+            source_filter=source_filter,
+            user_id=user_id
+        )
 
         # Rerank if enabled and available
         reranked = False

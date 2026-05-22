@@ -15,10 +15,9 @@ from backend.ingestion import (
 )
 from backend.storage import VectorStore
 from backend.retrieval import QueryEngine
-from backend.retrieval.bm25_index import BM25Index
 from backend.config import (
     MAX_UPLOAD_SIZE, MAX_UPLOAD_SIZE_MB, ENABLE_QUERY_ROUTING,
-    CHUNKING_METHOD, USE_HYBRID_RETRIEVAL, UPLOADS_DIR
+    CHUNKING_METHOD, UPLOADS_DIR
 )
 from backend.routing import QueryRouter, RouteHandlers
 from backend.auth import get_current_user
@@ -100,12 +99,11 @@ vector_store = None
 query_engine = None
 query_router = None
 route_handlers = None
-bm25_index = None
 
 
 def get_components():
     global epub_processor
-    global chunker, vector_store, query_engine, query_router, route_handlers, bm25_index
+    global chunker, vector_store, query_engine, query_router, route_handlers
 
     # Initialize EPUB processor and chunker
     if epub_processor is None:
@@ -115,11 +113,6 @@ def get_components():
             chunker = Chunker()
         if is_ebooklib_available():
             epub_processor = EPUBProcessor()
-
-    # Initialize BM25 index for hybrid retrieval
-    if bm25_index is None and USE_HYBRID_RETRIEVAL:
-        bm25_index = BM25Index()
-        bm25_index.load()  # Try loading from cache
 
     # Initialize vector store and query engine (require API keys)
     # Check separately so a failed init can be retried
@@ -133,7 +126,7 @@ def get_components():
             )
 
     if query_engine is None:
-        query_engine = QueryEngine(vector_store=vector_store, bm25_index=bm25_index)
+        query_engine = QueryEngine(vector_store=vector_store)
 
     # Initialize query router and handlers (if routing is enabled)
     if query_router is None and ENABLE_QUERY_ROUTING:
@@ -150,7 +143,6 @@ def get_components():
         "query_engine": query_engine,
         "query_router": query_router,
         "route_handlers": route_handlers,
-        "bm25_index": bm25_index,
     }
 
 
@@ -303,18 +295,6 @@ async def upload_document(
         else:
             detail = f"Failed to store document: {str(e)}"
         raise HTTPException(status_code=503, detail=detail)
-
-    # Update BM25 index for hybrid retrieval
-    if bm25_index is not None:
-        bm25_items = []
-        for chunk, doc_id in zip(chunks, doc_ids):
-            bm25_items.append({
-                "text": chunk["text"],
-                "id": doc_id,
-                "metadata": {"source": chunk.get("source", "unknown"), "source_type": chunk.get("source_type", "unknown"), "user_id": user_id_str}
-            })
-        bm25_index.add_chunks(bm25_items)
-        bm25_index.save()
 
     from backend.documents.database import insert_document
 
@@ -542,15 +522,6 @@ async def delete_document(
             "Pinecone delete failed for source=%r user_id=%s",
             doc["filename"], user_id_str,
         )
-
-    # Clean up BM25 hybrid-retrieval index so deleted chunks stop showing up in queries
-    bm25 = components.get("bm25_index")
-    if bm25 is not None:
-        try:
-            bm25.remove_by_source(doc["filename"], user_id=user_id_str)
-            bm25.save()
-        except Exception:
-            logging.exception("BM25 cleanup failed for %r", doc["filename"])
 
     return {
         "success": True,

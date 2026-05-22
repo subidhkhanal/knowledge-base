@@ -22,10 +22,6 @@ CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "512"))  # tokens (recommended: 400-512
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "75"))  # tokens (~15% overlap)
 CHUNKING_METHOD = os.getenv("CHUNKING_METHOD", "recursive")  # "linear" or "recursive"
 
-# Hybrid retrieval
-USE_HYBRID_RETRIEVAL = os.getenv("USE_HYBRID_RETRIEVAL", "true").lower() == "true"
-RRF_K = int(os.getenv("RRF_K", "60"))
-
 # Retrieval settings
 TOP_K = 5  # Number of chunks to retrieve
 SIMILARITY_THRESHOLD = 0.3  # Minimum similarity score

@@ -25,9 +25,6 @@ tiktoken>=0.5.0
 # Evaluation (install manually: pip install ragas google-genai datasets)
 # Only needed for running backend/evaluation/eval_runner.py
 
-# Hybrid Retrieval
-rank-bm25>=0.2.2
-
 # Database (PostgreSQL)
 asyncpg>=0.29.0
 

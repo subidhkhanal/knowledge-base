@@ -167,10 +167,9 @@ async def delete_project(
     # Fetch all documents before deleting DB records
     project_docs = await documents_db.get_documents_by_project(project["id"], user_id=user_id)
 
-    # Clean up Pinecone + BM25 for each document
+    # Clean up Pinecone for each document
     components = _get_components()
     user_id_str = str(user_id)
-    bm25 = components.get("bm25_index")
     for doc in project_docs:
         try:
             components["vector_store"].delete_by_source(
@@ -181,19 +180,6 @@ async def delete_project(
                 "Pinecone delete failed for source=%r user_id=%s",
                 doc.get("filename"), user_id_str,
             )
-
-        if bm25 is not None:
-            try:
-                bm25.remove_by_source(doc["filename"], user_id=user_id_str)
-            except Exception:
-                logging.exception("BM25 cleanup failed for %r", doc.get("filename"))
-
-    # Persist BM25 once after all removals (avoid quadratic save cost)
-    if bm25 is not None:
-        try:
-            bm25.save()
-        except Exception:
-            logging.exception("BM25 save failed after project delete")
 
     # Delete DB records (project + documents)
     await db.delete_project(slug, user_id)
